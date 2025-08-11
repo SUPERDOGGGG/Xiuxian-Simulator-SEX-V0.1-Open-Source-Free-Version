@@ -1,0 +1,1665 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>修仙模拟器 · 苏夜雨版V0.1 </title>
+    <style>
+        :root{--bg:#0f1116;--panel:#151923;--muted:#9aa3af;--text:#e8ecf1;--accent:#ff69b4;--accent2:#ff7f50;--danger:#ff6b6b;--ok:#a2ff7a;--gap:12px;--r:14px;--shadow:0 8px 24px rgba(0,0,0,.35)}
+        *{box-sizing:border-box}body{margin:0;background:radial-gradient(1200px 800px at 80% -10%,rgba(255,105,180,.08),transparent 55%),radial-gradient(900px 600px at -10% 80%,rgba(255,127,80,.07),transparent 50%),var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,PingFang SC,Hiragino Sans GB,Microsoft YaHei,Helvetica,Arial}
+        .app{display:grid;grid-template-rows:auto 1fr auto;min-height:100vh;gap:var(--gap);padding:14px}
+        header,footer{display:flex;align-items:center;gap:var(--gap);background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:var(--r);padding:10px 12px;backdrop-filter:blur(4px)}
+        header{justify-content:space-between}
+        .hud{display:flex;gap:var(--gap);align-items:center}
+        .block{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid rgba(255,255,255,.08);padding:8px 10px;border-radius:12px;box-shadow:var(--shadow)}
+        .name{font-weight:700}.realm{color:var(--accent)}
+        .bar{position:relative;height:12px;background:#1b2030;border-radius:999px;overflow:hidden;border:1px solid rgba(255,255,255,.06)}.bar>span{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,var(--a),var(--b))}.danger{--a:#ff8a8a;--b:#ff6b6b}.qi{--a:#ff69b4;--b:#ff1493}.exp{--a:#ffd27a;--b:#ffb74a}.prog{--a:#ff7f50;--b:#ff4500}.degen{--a:#8b0000;--b:#ff0000}
+        .layout{display:grid;grid-template-columns:1.05fr .95fr;gap:var(--gap)}
+        .panel{background:var(--panel);border:1px solid rgba(255,255,255,.06);border-radius:var(--r);box-shadow:var(--shadow)}
+        .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px;border-bottom:1px dashed rgba(255,255,255,.08)}
+        .narrative{display:grid;grid-template-rows:auto 1fr auto;min-height:440px}
+        .n-text{padding:14px 16px;overflow:auto;max-height:52vh}
+        .choices{display:grid;gap:8px;padding:12px;border-top:1px dashed rgba(255,255,255,.08);background:rgba(0,0,0,.15);border-radius:0 0 var(--r) var(--r)}
+        .choice,.btn{appearance:none;border:none;cursor:pointer;padding:8px 10px;border-radius:10px;background:#1a1f2c;border:1px solid rgba(255,255,255,.12);color:var(--text);text-align:left}
+        .choice:hover,.btn:hover{border-color:rgba(255,255,255,.24)}
+        .pill{padding:6px 10px;border-radius:999px;background:#1a1f2c;border:1px solid rgba(255,255,255,.08);color:var(--muted)}
+        .tabs{display:grid;grid-template-rows:auto 1fr}
+        .tab-bar{display:flex;gap:8px;padding:10px;border-bottom:1px dashed rgba(255,255,255,.08)}
+        .tab-btn{padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:#191e2a;color:var(--text)}.tab-btn.active{background:#202636;outline:2px solid rgba(255,105,180,.25)}
+        .tab-page{display:none;padding:10px;overflow:auto;max-height:52vh}.tab-page.active{display:block}
+        .list{display:grid;gap:6px}.item{display:flex;justify-content:space-between;align-items:center;background:#1a1f2c;border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:8px 10px}
+        .toasts{position:fixed;right:16px;top:16px;display:grid;gap:8px;z-index:60}.toast{background:#181d2a;border:1px solid rgba(255,255,255,.12);padding:10px 12px;border-radius:10px;box-shadow:var(--shadow)}
+        /* Modals */.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}.modal.show{display:flex}
+        .dialog{width:min(1020px,96vw);background:#151923;border:1px solid rgba(255,255,255,.1);border-radius:16px;box-shadow:var(--shadow)}.dialog header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.08)}.dialog .body{padding:12px 14px}
+        .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        .attr-panel .dialog{width:min(820px,96vw)}
+        .field{display:flex;flex-direction:column;gap:6px}.field input,.field select,.field textarea{background:#1a1f2c;border:1px solid rgba(255,255,255,.12);color:var(--text);border-radius:8px;padding:8px}
+        /* Battle */.battle-modal .dialog{width:min(1040px,96vw)}.timeline{display:flex;gap:6px;overflow-x:auto;padding:8px;background:#1a1f2c;border:1px solid rgba(255,255,255,.08);border-radius:10px}.chip{padding:6px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:#171c29}.chip.me{outline:2px solid rgba(255,127,80,.25)}.skill-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+        /* Dialogue */.dialogue .dialog{width:min(860px,96vw)}.dlg-log{max-height:260px;overflow:auto;background:#1a1f2c;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px}.dlg-choices{display:grid;gap:8px;margin-top:8px}
+        /* World Map */.worldmap .dialog{width:min(1100px,96vw)}.map-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}.map-cell{background:#171c29;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:8px;cursor:pointer}.map-cell.current{outline:2px solid rgba(255,105,180,.35)}
+        /* Equip */.equip .dialog{width:min(900px,96vw)}.equip-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.slot{display:flex;justify-content:space-between;align-items:center;background:#1a1f2c;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:8px}
+        /* Lust Panel */.lust-panel .dialog{width:min(800px,96vw)}.lust-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.lust-slot{background:#1a1f2c;border:1px solid rgba(255,105,180,.2);border-radius:10px;padding:8px}
+        /* Debug */.debug .dialog{width:min(600px,96vw)}.debug-grid{display:grid;gap:8px}
+        @media (max-width:980px){.layout{grid-template-columns:1fr}.bar{width:160px}.grid2{grid-template-columns:1fr}}
+        
+    </style>
+</head>
+<body>
+    <div class="app">
+      <header>
+        <div class="hud">
+          <div class="block"><span class="name" id="name">苏夜雨</span><span class="muted">|</span><span class="realm" id="realm">练气一层</span></div>
+          <div class="block"><span class="bar-label">HP</span><div class="bar danger" style="width:200px"><span id="hp-bar"></span></div><span id="hp-text" class="pill">0/0</span></div>
+          <div class="block"><span class="bar-label">灵力</span><div class="bar qi" style="width:200px"><span id="qi-bar"></span></div><span id="qi-text" class="pill">0/0</span></div>
+          <div class="block"><span id="lv" class="bar-label">Lv.1</span><div class="bar exp" style="width:160px"><span id="exp-bar"></span></div><span id="exp-text" class="pill">0/20</span></div>
+          <div class="block" title="艳遇蓄势进度"><span class="bar-label">艳遇</span><div class="bar prog" style="width:140px"><span id="rngp-bar"></span></div><span id="rngp-text" class="pill">0%</span></div>
+          <div class="block" title="堕落度"><span class="bar-label">堕落</span><div class="bar degen" style="width:140px"><span id="degen-bar"></span></div><span id="degen-text" class="pill">0%</span></div>
+        </div>
+        <div class="hud">
+          <div class="block">
+            <span class="bar-label">存档槽</span>
+            <select id="slot"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+            <button class="btn" id="btn-save">保存</button>
+            <button class="btn" id="btn-load">读取</button>
+            <button class="btn" id="btn-export">导出JSON</button>
+            <label class="btn" for="file-import">导入JSON</label>
+            <input id="file-import" type="file" accept="application/json" hidden />
+          </div>
+          <div class="block">
+            <span class="bar-label">时间</span>
+            <select id="time-speed"><option value="manual" selected>手动</option><option value="slow">慢速</option><option value="normal">正常</option><option value="fast">快速</option></select>
+            <button class="btn" id="btn-next-hour">+1 时辰</button>
+            <button class="btn" id="btn-next-day">+1 天</button>
+          </div>
+          <button class="btn" id="btn-worldmap">大地图🗺️</button>
+          <button class="btn" id="btn-shops">商店</button>
+        </div>
+      </header>
+      <main class="layout">
+        <section class="panel narrative">
+          <div class="toolbar">
+            <span class="pill">日期：<b id="date-pill">元年 正月 初一</b></span>
+            <span class="pill">天气：<b id="weather-pill">晴</b></span>
+            <span class="pill">地点：<b id="loc-pill">—</b></span>
+            <span class="pill" id="main-hint">主线：—</span>
+          </div>
+          <div id="narrative" class="n-text"></div>
+          <div id="choices" class="choices"></div>
+        </section>
+        <aside class="panel tabs">
+          <div class="tab-bar">
+            <button class="tab-btn active" data-tab="bag">背包📦</button>
+            <button class="tab-btn" data-tab="tech">功法📘</button>
+            <button class="tab-btn" data-tab="traits">特质</button>
+            <button class="tab-btn" data-tab="equips">装备栏</button>
+            <button class="tab-btn" data-tab="skills">技能</button>
+            <button class="tab-btn" data-tab="lust">色欲面板❤</button>
+            <button class="tab-btn" data-tab="btn-attrs">属性</button>
+            <button class="tab-btn" data-tab="status">状态</button>
+            <button class="tab-btn" data-tab="quest">任务</button>
+            <button class="tab-btn" data-tab="people">人物</button>
+            <button class="tab-btn" data-tab="best">敌人</button>
+            <button class="tab-btn" data-tab="map">地点</button>
+          </div>
+         <div class="tab-page active" id="tab-bag"><div id="bag-list" class="list"></div></div>
+          <div class="tab-page" id="tab-tech"><div id="tech-list" class="list"></div></div>
+          <div class="tab-page" id="tab-traits"><div id="trait-list" class="list"></div></div>
+          <div class="tab-page" id="tab-equips"><div id="equip-list" class="list"></div></div>
+          <div class="tab-page" id="tab-skills"><div id="skill-list" class="list"></div></div>
+          <div class="tab-page" id="tab-lust">
+          <div id="lust-list" class="list"></div></div>
+          <div class="tab-page" id="tab-btn-attrs"><div id="attr-list" class="list"></div></div>
+          <div class="tab-page" id="tab-status"><div id="status-list" class="list"></div></div>
+          <div class="tab-page" id="tab-quest"><div id="quest-list" class="list"></div></div>
+          <div class="tab-page" id="tab-people"><div id="people-list" class="list"></div></div>
+          <div class="tab-page" id="tab-best"><div id="best-list" class="list"></div></div>
+         <div class="tab-page" id="tab-map"><div id="map-list" class="list"></div></div>
+        </aside>
+      </main>
+      <footer>
+        <div class="hud">
+          <span class="pill" id="time-pill">第1日 卯时</span>
+          <span class="pill">灵石：<b id="stones">0</b></span>
+        </div>
+        <div class="hud" id="action-bar">
+          <button class="btn" data-act="meditate">修炼</button>
+          <button class="btn" data-act="explore">探索/狩猎</button>
+          <button class="btn" data-act="work">打工</button>
+          <button class="btn" data-act="commission">接委托</button>
+          <button class="btn" data-act="talk">与附近的人交谈</button>
+          <button class="btn" data-act="rest">休息</button>
+          <button class="btn" data-act="seduce">调情/勾引❤</button>
+          <button class="btn" data-act="pleasure">自慰泄欲❤</button>
+          <button class="btn" data-act="degen">堕落行动❤</button>
+          <button class="btn" data-act="escape" style="display:none">逃跑</button>
+        </div>
+      </footer>
+    </div>
+    <div id="toasts" class="toasts"></div>
+
+    <!-- 创建角色 -->
+    <div id="newchar" class="modal show">
+      <div class="dialog">
+        <header><strong>创建角色</strong><button class="btn" id="nc-close">×</button></header>
+        <div class="body">
+          <div class="grid2">
+            <div class="field"><label>姓名</label><input id="nc-name" value="苏夜雨"></div>
+            <div class="field"><label>性别</label><select id="nc-gender"><option selected>女</option><option>男</option></select></div>
+            <div class="field"><label>性取向</label><select id="nc-orient"><option>异性</option><option>同性</option><option>双性</option></select></div>
+            <div class="field"><label>年龄（≥14）</label><input id="nc-age" type="number" min="14" value="14"></div>
+            <div class="field"><label>出身</label><select id="nc-origin"><option>散修</option><option>宗门外门</option><option>家族弟子</option><option>青楼出身</option></select></div>
+            <div class="field"><label>初始婚姻</label><select id="nc-marriage"><option>未婚</option><option>已婚</option><option>丧偶</option></select></div>
+            <div class="field"><label>是否可孕</label><select id="nc-fertile"><option value="yes">是</option><option value="no">否</option></select></div>
+            <div class="field"><label>魅力值</label><input id="nc-charm" type="number" min="0" max="100" value="50"></div>
+            <div class="field"><label>欲值初始</label><input id="nc-lust" type="number" min="0" max="100" value="20"></div>
+            <div class="field"><label>堕落度初始</label><input id="nc-degen" type="number" min="0" max="100" value="0"></div>
+          </div>
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center"><button class="btn" id="nc-ok">开始旅程</button><span class="pill">此界女子地位低下，常被视作玩物，易遭调戏、侵犯、堕落。</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 物品详情 -->
+    <div id="item-modal" class="modal"><div class="dialog"><header><strong id="item-title">物品</strong><button class="btn" id="item-close">×</button></header><div class="body"><div id="item-desc" style="white-space:pre-wrap"></div><div style="margin-top:10px"><button class="btn" id="item-use">使用</button></div></div></div></div>
+
+    <!-- 战斗 -->
+    <div id="battle" class="modal battle-modal"><div class="dialog"><header><strong>战斗</strong><div class="pill">地点：<b id="battle-loc">—</b>｜回合：<b id="round-num">1</b></div><button class="btn" id="battle-close" disabled>进行中…</button></header><div class="body"><div id="timeline" class="timeline"></div><div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap"><span class="pill">我方 HP <b id="me-hp"></b> / 灵力 <b id="me-qi"></b></span><span class="pill">敌方 <b id="en-name"></b> · HP <b id="en-hp"></b></span></div><div id="battle-log" class="n-text" style="max-height:240px;margin-top:8px"></div><div id="battle-skills" class="skill-row"></div><div style="margin-top:8px;display:flex;gap:8px"><button class="btn" id="btn-defend">防御</button><button class="btn" id="btn-flee">逃跑</button><button class="btn" id="btn-seduce-battle">诱惑敌人</button><button class="btn" id="btn-rape-battle">侵犯敌人</button></div></div></div></div>
+
+    <!-- 对话 -->
+    <div id="dialogue" class="modal dialogue"><div class="dialog"><header><strong id="dlg-npc-name">对话</strong><button class="btn" id="dlg-close">×</button></header><div class="body"><div id="dlg-log" class="dlg-log"></div><div id="dlg-choices" class="dlg-choices"></div></div></div></div>
+
+    <!-- 大地图 -->
+    <div id="worldmap" class="modal worldmap"><div class="dialog"><header><strong>大地图</strong><button class="btn" id="wm-close">×</button></header><div class="body"><div id="wm-grid" class="map-grid"></div></div></div></div>
+
+    <!-- 装备栏 -->
+    <div id="equip-modal" class="modal equip">
+  <div class="dialog">
+    <header>
+      <strong>装备栏</strong>
+      <button class="btn" id="equip-close">×</button>
+    </header>
+    <div class="body">
+      <div class="equip-grid">
+        <!-- 这里添加新的装备槽位 -->
+        <div>
+          <div class="slot">主武器：<b id="eq-weapon">无</b></div>
+          <div class="slot">护甲：<b id="eq-armor">无</b></div>
+          <div class="slot">饰品1：<b id="eq-acc1">无</b></div>
+          <div class="slot">饰品2：<b id="eq-acc2">无</b></div>
+          <div class="slot">饰品3：<b id="eq-acc3">无</b></div>
+          <div class="slot">足部：<b id="eq-feet">无</b></div>
+          <div class="slot">内衣：<b id="eq-underwear">无</b></div>
+          <div class="slot">内裤：<b id="eq-panty">无</b></div>
+          <div class="slot">乳环：<b id="eq-nipple">无</b></div>
+          <div class="slot">腰饰：<b id="eq-waist">无</b></div>
+          <div class="slot">脚链：<b id="eq-ankle">无</b></div>
+        </div>
+        <div>
+          <div class="list" id="equipables"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    <!-- 色欲面板 -->
+    <div id="lust-modal" class="modal lust-panel"><div class="dialog"><header><strong>色欲面板</strong><button class="btn" id="lust-close">×</button></header><div class="body"><div class="lust-grid"><div class="lust-slot">魅力：<b id="lust-charm">0</b></div><div class="lust-slot">欲值：<b id="lust-value">0/100</b></div><div class="lust-slot">敏感度：<b id="lust-sens">中</b></div><div class="lust-slot">经验次数：<b id="lust-exp">0</b></div><div class="lust-slot">伴侣数：<b id="lust-partners">0</b></div><div class="lust-slot">孕育状态：<b id="lust-preg">无</b></div><div class="lust-slot">堕落度：<b id="lust-degen">0%</b></div></div></div></div></div>
+
+    <!-- 属性面板 -->
+<div id="attr-modal" class="modal attr-panel">
+  <div class="dialog">
+    <header>
+      <strong>角色属性</strong>
+      <button class="btn" id="attr-close" data-close="#attr-modal">×</button>
+    </header>
+    <div class="body">
+      <div id="attr-content" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
+    </div>
+  </div>
+</div>
+
+
+    <!-- 调试面板 -->
+    <div id="debug-modal" class="modal debug"><div class="dialog"><header><strong>调试面板</strong><button class="btn" id="debug-close">×</button></header><div class="body"><div class="debug-grid"><div class="field"><label>HP</label><input id="debug-hp" type="number"></div><div class="field"><label>灵力</label><input id="debug-qi" type="number"></div><div class="field"><label>经验</label><input id="debug-exp" type="number"></div><div class="field"><label>魅力</label><input id="debug-charm" type="number"></div><div class="field"><label>欲值</label><input id="debug-lust" type="number"></div><div class="field"><label>堕落度</label><input id="debug-degen" type="number"></div><button class="btn" id="debug-apply">应用</button><button class="btn" id="debug-leave">离开场景</button></div></div></div></div>
+
+
+
+<script>
+// ====== 工具 ======
+const RNG={seed:Math.floor(Math.random()*1e9),next(){this.seed=(this.seed*1664525+1013904223)>>>0;return this.seed/2**32},roll(p){return this.next()<p}};const $=(s,r=document)=>r.querySelector(s);const el=id=>document.getElementById(id);
+const numCN=d=>{const m=['零','一','二','三','四','五','六','七','八','九','十'];if(d<=10)return m[d];if(d<20)return '十'+m[d-10];const a=Math.floor(d/10),b=d%10;return m[a]+'十'+(b?m[b]:'')};
+function setBar(node,ratio){node.style.width=(Math.max(0,Math.min(1,ratio))*100).toFixed(1)+'%'}
+function rndInt(a,b){return a+Math.floor(RNG.next()*(b-a+1))}
+function toast(t){const n=document.createElement('div');n.className='toast';n.textContent=t;el('toasts').append(n);setTimeout(()=>{n.style.opacity='0';n.style.transform='translateY(-6px)'},2400);setTimeout(()=>n.remove(),3000)}
+function randPick(arr){return arr[Math.floor(RNG.next()*arr.length)]}
+
+// ====== 日历/天气 ======
+const Weather=['晴','多云','小雨','大风','雾','淫雨','艳阳','阴霾','暴风雨','雾霭'];
+const Calendar={year:1,month:1,day:1,toText(){return `${this.year}年 ${this.month}月 ${this.day<10?'初'+numCN(this.day):this.day+'日'}`},nextDay(){this.day++;if(this.day>30){this.day=1;this.month++;if(this.month>12){this.month=1;this.year++;}}updateDate();weather.roll();mensesTick();pregnancyTick();degenTick();if(GS.flags.captured)capturedLife();}};
+const weather={cur:'晴',roll(){const r=RNG.next();this.cur=r<.4?'晴':r<.6?'多云':r<.75?'小雨':r<.85?'大风':r<.92?'雾':r<.96?'淫雨':r<.98?'艳阳':r<.99?'阴霾':'暴风雨';el('weather-pill').textContent=this.cur}};
+
+// ====== 物品册（扩展色情物品，增加堕落相关） ======
+const ITEMBOOK={
+  '回气丹':{type:'consum',desc:'回复灵力 6 点。',use(gs){gs.player.qi=Math.min(gs.player.qi_max,gs.player.qi+6);return true;}},
+  '养血丸':{type:'consum',gender:'女',desc:'缓解经期不适，小幅回复HP+2。',use(gs){if(gs.player.gender!=='女')return false;gs.player.hp=Math.min(gs.player.hp_max,gs.player.hp+2);gs.player.menses.comfort+=2;return true;}},
+  '暖身茶':{type:'consum',gender:'女',desc:'提升当日经期舒适度+3。',use(gs){if(gs.player.gender!=='女')return false;gs.player.menses.comfort+=3;return true;}},
+  '行脚令':{type:'quest',desc:'允许跨州远行（解锁远行事件与部分商店）。',use(gs){gs.flags.travel=true;return true;}},
+  '辟谷丹':{type:'consum',desc:'三日内不受饥饿影响（演示：HP+2，灵力+2）。',use(gs){gs.player.hp=Math.min(gs.player.hp_max,gs.player.hp+2);gs.player.qi=Math.min(gs.player.qi_max,gs.player.qi+2);gs.flags.biguan=3;return true;}},
+  '安胎符':{type:'consum',gender:'女',desc:'降低流产风险：怀孕安全+10。',use(gs){if(gs.player.gender!=='女')return false;gs.player.pregnancy.safety+=10;return true;}},
+  '媚药散':{type:'consum',desc:'提升欲值+20，易触发艳遇，堕落+5。',use(gs){gs.player.lust=Math.min(100,gs.player.lust+20);gs.player.degen=Math.min(100,gs.player.degen+5);return true;}},
+  '春宫图':{type:'book',desc:'研习后魅力+2，欲值+10，堕落+8。',use(gs){gs.player.charm+=2;gs.player.lust+=10;gs.player.degen+=8;return true;}},
+  '玉势':{type:'toy',gender:'女',desc:'自慰用，泄欲-15，敏感度+1，堕落+3。',use(gs){if(gs.player.gender!=='女')return false;gs.player.lust=Math.max(0,gs.player.lust-15);gs.player.sensitivity+=1;gs.player.degen+=3;return true;}},
+  '堕落丹':{type:'consum',desc:'直接增加堕落度+15，引发随机堕落事件。',use(gs){gs.player.degen=Math.min(100,gs.player.degen+15);triggerDegenEvent();return true;}},
+  '温玉佩':{type:'acc',desc:'饰品：魅力+1（好感事件略易成功）。',equip:'acc',onEquip(gs){gs.player.charm+=1},onUnequip(gs){gs.player.charm=Math.max(0,gs.player.charm-1)}},
+  '木剑':{type:'weapon',desc:'主武器：基础伤害+1。',equip:'weapon',onEquip(gs){gs.flags.atkPlus=(gs.flags.atkPlus||0)+1},onUnequip(gs){gs.flags.atkPlus=Math.max(0,(gs.flags.atkPlus||0)-1)}},
+  '皮甲':{type:'armor',desc:'护甲：最大生命+4。',equip:'armor',onEquip(gs){gs.player.hp_max+=4;gs.player.hp+=4},onUnequip(gs){gs.player.hp_max=Math.max(1,gs.player.hp_max-4);gs.player.hp=Math.min(GS.player.hp,gs.player.hp_max)}},
+  '丝袍':{type:'armor',gender:'女',desc:'轻薄丝袍，魅力+3，但防御-1，堕落+2。',equip:'armor',onEquip(gs){gs.player.charm+=3;gs.player.hp_max-=1;gs.player.degen+=2},onUnequip(gs){gs.player.charm-=3;gs.player.hp_max+=1;gs.player.degen-=2}},
+  '淫纹贴':{type:'acc',desc:'贴于小腹，欲值恒增，堕落+10。',equip:'acc',onEquip(gs){gs.player.lust+=5;gs.player.degen+=10},onUnequip(gs){gs.player.lust-=5;gs.player.degen-=10}},
+  '诅咒项链': {type:'acc',desc:'魅力+5，但每日hp-2，堕落+10，负面效果：易被霸凌事件触发率+20%。',equip:'acc',onEquip(gs){gs.player.charm+=5;gs.player.degen+=10;gs.flags.bully_rate = (gs.flags.bully_rate||0)+0.2;},onUnequip(gs){gs.player.charm-=5;gs.player.degen-=10;gs.flags.bully_rate-=0.2;}},
+  '奴隶锁链': {type:'toy',desc:'使用后堕落+20，敏感度+5，负面效果：逃跑成功率-10%，易被俘虏。',use(gs){gs.player.degen+=20;gs.player.sensitivity+=5;gs.flags.escape_rate = (gs.flags.escape_rate||0)-0.1;return true;}},
+  '淫兽卵': {type:'consum',desc:'吞服后堕落+15，孕育淫兽子嗣，负面效果：hp_max-5，永久状态‘兽孕体质’。',use(gs){gs.player.degen+=15;gs.player.hp_max-=5;gs.player.pregnancy.pregnant=true;gs.player.pregnancy.day=1;gs.statuses.push('兽孕体质');return true;}},
+  '血肉鞭': {type:'weapon',desc:'攻击+5，但使用后hp-3，堕落+5，负面效果：战斗中随机自伤。',equip:'weapon',onEquip(gs){gs.flags.atkPlus=(gs.flags.atkPlus||0)+5;gs.player.degen+=5;},onUnequip(gs){gs.flags.atkPlus-=5;gs.player.degen-=5;}},
+  '欲火焚身丹': {type:'consum',desc:'欲值+30，堕落+10，负面效果：随机触发公开自慰事件。',use(gs){gs.player.lust+=30;gs.player.degen+=10;if(RNG.roll(0.5))say('丹药发作，你公开自慰，路人围观，阴户滴汁。');return true;}},
+  '后庭花环': {type:'toy',gender:'女',desc:'后庭敏感+5，堕落+15，负面效果：逃跑几率-15%。',use(gs){if(gs.player.gender!=='女')return false;gs.player.sensitivity+=5;gs.player.degen+=15;gs.flags.escape_rate -=0.15;return true;}},
+  '灵魂腐蚀剑': {type:'weapon',desc:'攻击+8，但每日堕落+3，负面效果：战斗失败被俘虏率+20%。',equip:'weapon',onEquip(gs){gs.flags.atkPlus+=8;},onUnequip(gs){gs.flags.atkPlus-=8;}},
+  '淫纹战甲': {
+  type: 'armor',
+  desc: '刻有特殊花纹的战甲，防御+25，魅力+20，敏感+15，堕落+10。',
+  equip: 'armor',
+  onEquip(gs) {
+    gs.player.def = (gs.player.def || 0) + 25;
+    gs.player.charm += 20;
+    gs.player.sensitivity += 15;
+    gs.player.degen += 10;
+  },
+  onUnequip(gs) {
+    gs.player.def -= 25;
+    gs.player.charm -= 20;
+    gs.player.sensitivity -= 15;
+    gs.player.degen -= 10;
+  }
+},
+  '魅魔项圈': {
+    type: 'acc',
+    slot: 'acc1',
+    price: 6000,
+    stats: {
+      charm: 25,
+      sensitivity: 20,
+      degen: 12,
+      lust: 15
+    },
+    effects: ['每小时增加堕落值','自动吸收淫气转化为能量'],
+    desc: '来自魅魔的道具'
+  },
+
+};
+
+// ====== 初始状态 ======
+const GS={
+  player:{name:'苏夜雨',gender:'女',orient:'异性',age:14,realm:'练气一层',hp:30,hp_max:30,qi:20,qi_max:20,level:1,exp:0,exp_to_next:20,faction:'散修',mood:'平静',married:false,spouse:null,children:[],
+    traits:['清心寡欲','天生媚骨'],skills:[{id:'strike',name:'碎云拳',qi:0,dmg:[3,6],spd:6,desc:'基本拳法。'},{id:'fire',name:'火球术',qi:4,dmg:[7,12],spd:5,desc:'凝聚灵火掷出。'},{id:'aqua',name:'水幕护身',qi:3,dmg:[0,0],spd:7,desc:'获得护体之力。',buff:{shield:6}},{id:'seduce',name:'媚眼术',qi:2,dmg:[0,0],spd:8,desc:'诱惑敌人，降低敌速-1。'}],
+    menses:{enabled:true,cycle:28,day:1,comfort:0,bleeding:false},pregnancy:{enabled:true,pregnant:false,day:0,safety:0},
+    charm:50,lust:20,lustMax: 100,sensitivity:0,lustGainRate: 1,sex_exp:0,partners:0,degen:0, degenMax: 100, // 堕落度上限
+    degenGainRate: 1, // 堕落获得倍率
+    degenResist: 0, // 堕落抗性
+    degenStages: [],
+    // 状态标记
+    isLustful: false, // 欲望爆发
+    isCorrupted: false, // 堕落爆发 
+  },
+  time:'卯时',day:1,loc:'清风镇·客栈',sub_loc:'',stones:18,
+  inventory:{'粗布衣':1,'回气丹':3,'养血丸':1,'暖身茶':1,'媚药散':2,'春宫图':1,'玉势':1,'丝袍':1,'温玉佩':1,'行脚令':1,'木剑':1,'皮甲':1,'堕落丹':1,'淫纹贴':1},
+  equips:{weapon:null,armor:'粗布衣',acc:null},
+  techniques:['《吐纳术》','《凝息诀》','《媚骨诀》','《堕魂经》'],traits:['清心寡欲','天生媚骨','初堕倾向'],statuses:[],
+  relations:[
+    {id:'xi',name:'席晚宁',gender:'女',age:16,favor:12,trust:6,loc:'清风镇·大街',looks:'眉目如画，神情温婉，柳腰纤细，香臀圆润，玉乳微颤，骚穴隐现春光。'},
+    {id:'su',name:'苏轻舟',gender:'男',age:21,favor:8,trust:10,loc:'玉衡宗·山门',looks:'清俊寡言，目光沉稳，大屌隐现裤裆。'},
+    {id:'ji',name:'纪霁月',gender:'女',age:15,favor:5,trust:12,loc:'清风镇·药铺',looks:'一身药香，笑意如春，红唇微启，美臀轻摆，阴穴湿润，媚眼流转。'},
+    {id:'lin',name:'林疏影',gender:'女',age:14,favor:18,trust:9,loc:'北岭郊外',looks:'英气凌厉，风姿明艳，香臀翘起，小穴紧致，玉乳丰满，粉嫩后庭。'},
+    {id:'jiang',name:'江晓',gender:'女',age:17,favor:10,trust:5,loc:'清风镇·青楼',looks:'娇媚入骨，红唇欲滴，骚穴多汁，美臀摇曳，阴户隐现蜜液。'},
+    {id:'yun',name:'云浅',gender:'男',age:19,favor:15,trust:8,loc:'雾隐村·林间',looks:'俊朗潇洒，阳具粗长，目光炙热。'},
+    {id:'mei',name:'梅婉儿',gender:'女',age:13,favor:7,trust:4,loc:'灵药谷·溪边',looks:'娇小玲珑，粉嫩肌肤，小穴粉红，美臀柔软。'}
+  ],
+  bestiary:[
+    {id:'wolf',name:'野狼',tier:1,hp:18,atk:[2,5],spd:6,drops:[['兽皮',0.6,1],['兽骨',0.3,1]]},
+    {id:'bandit',name:'山匪',tier:1,hp:22,atk:[3,6],spd:5,drops:[['碎银',0.8,5]]},
+    {id:'snake',name:'灵蛇',tier:1,hp:16,atk:[2,6],spd:8,drops:[['蛇胆',0.35,1]]},
+    {id:'ghost',name:'游魂',tier:2,hp:28,atk:[4,8],spd:7,drops:[['阴魂珠',0.25,1]]},
+    {id:'rapist',name:'淫贼',tier:1,hp:20,atk:[3,7],spd:6,drops:[['媚药散',0.4,1]]},
+    {id:'beast',name:'淫兽',tier:2,hp:25,atk:[4,9],spd:5,drops:[['兽精',0.5,1]]},
+    {id:'cultist',name:'邪修',tier:3,hp:32,atk:[5,10],spd:7,drops:[['堕落丹',0.3,1]]}
+  ],
+  map:['清风镇·客栈','清风镇·大街','清风镇·药铺','清风镇·青楼','北岭郊外','北岭密林','玉衡宗·山门','玉衡宗·外门','玉衡宗·藏经阁','灵药谷','雾岚湖畔','古井秘窟','商路驿站','红尘巷','幽冥洞窟','堕落渊','血月林','媚狐村','淫魔塔'],
+  quests:[],flags:{rngp:0,travel:false,biguan:0,outerCount:0,captured:false,captured_loc:'',captured_sub_loc:''}
+};
+
+// ====== 渲染 ======
+function refresh(){el('name').textContent=GS.player.name;el('realm').textContent=GS.player.realm;setBar(el('hp-bar'),GS.player.hp/GS.player.hp_max);setBar(el('qi-bar'),GS.player.qi/GS.player.qi_max);setBar(el('exp-bar'),GS.player.exp/GS.player.exp_to_next);setBar(el('rngp-bar'),GS.flags.rngp/100);setBar(el('degen-bar'),GS.player.degen/100);el('hp-text').textContent=`${GS.player.hp}/${GS.player.hp_max}`;el('qi-text').textContent=`${GS.player.qi}/${GS.player.qi_max}`;el('exp-text').textContent=`${GS.player.exp}/${GS.player.exp_to_next}`;el('rngp-text').textContent=`${GS.flags.rngp|0}%`;el('degen-text').textContent=`${GS.player.degen}%`;el('time-pill').textContent=`第${GS.day}日 ${GS.time}`;el('loc-pill').textContent=GS.loc;el('stones').textContent=GS.stones;updateLists();updatePeople();updateBest();updateTraits();updateMap();updateQuests();updateLust();}
+function itemRow(l,r){const d=document.createElement('div');d.className='item';const a=document.createElement('span');a.textContent=l;const b=document.createElement('span');b.className='pill';b.textContent=r;d.append(a,b);return d}
+function updateLists(){const bag=el('bag-list');bag.innerHTML='';Object.entries(GS.inventory).forEach(([k,v])=>{const it=ITEMBOOK[k];const row=itemRow(k,`x${v}`);row.style.cursor='pointer';row.onclick=()=>openItem(k);bag.append(row)});const tech=el('tech-list');tech.innerHTML='';GS.techniques.forEach(t=>tech.append(itemRow(t,'')));const st=el('status-list');st.innerHTML='';GS.statuses.forEach(s=>st.append(itemRow(s,'')))}
+function updatePeople(){const box=el('people-list');box.innerHTML='';GS.relations.forEach(p=>{const r=itemRow(`${p.name}（${p.gender}/${p.age}）·好感 ${p.favor}｜信任 ${p.trust}`,p.loc);r.style.cursor='pointer';r.onclick=()=>openDialogue(p);box.append(r)})}
+function updateBest(){const box=el('best-list');box.innerHTML='';GS.bestiary.forEach(b=>box.append(itemRow(`${b.name}·阶${b.tier}`,`HP${b.hp}/速${b.spd}`)))}
+function updateTraits(){const box=el('trait-list');box.innerHTML='';[...new Set([...(GS.traits||[]),...(GS.player.traits||[])])].forEach(t=>box.append(itemRow(t,'')))}
+function updateMap(){const box=el('map-list');box.innerHTML='';GS.map.forEach(loc=>{const r=itemRow(loc,loc===GS.loc?'当前':'');r.style.cursor='pointer';r.onclick=()=>{goTo(loc)};box.append(r)})}
+function updateQuests(){const box=el('quest-list');box.innerHTML='';GS.quests.forEach(q=>box.append(itemRow(`${q.name}（${q.stageName}）`,q.desc||'')));el('main-hint').textContent=GS.quests[0]?`主线：${GS.quests[0].name}·${GS.quests[0].stageName}`:'主线：—'}
+function updateLust() {
+  const p = GS.player;
+  const box = document.getElementById('lust-list');
+  if (!box) return;
+  box.innerHTML = `
+    <div class="item"><span>魅力</span><span class="pill">${p.charm}</span></div>
+    <div class="item"><span>欲值</span><span class="pill">${p.lust}/100</span></div>
+    <div class="item"><span>敏感度</span><span class="pill">${['低','中','高','极高'][Math.min(3,Math.floor(p.sensitivity/10))]}</span></div>
+    <div class="item"><span>经验次数</span><span class="pill">${p.sex_exp}</span></div>
+    <div class="item"><span>伴侣数</span><span class="pill">${p.partners}</span></div>
+    <div class="item"><span>孕育状态</span><span class="pill">${p.pregnancy.pregnant?'孕育中':'无'}</span></div>
+    <div class="item"><span>堕落度</span><span class="pill">${p.degen}%</span></div>
+  `;
+}
+// 1. 装备栏tab内容渲染
+function updateEquipsTab() {
+  const box = document.getElementById('equip-list');
+  if (!box) return;
+  const equips = GS.equips || {};
+  box.innerHTML = `
+    <div class="item"><span>主武器</span><span class="pill">${equips.weapon || '无'}</span></div>
+    <div class="item"><span>护甲</span><span class="pill">${equips.armor || '无'}</span></div>
+    <div class="item"><span>饰品</span><span class="pill">${equips.acc || '无'}</span></div>
+  `;
+}
+
+// 2. 技能tab内容渲染
+function updateSkillsTab() {
+  const box = document.getElementById('skill-list');
+  if (!box) return;
+  box.innerHTML = '';
+  (GS.player.skills || []).forEach(sk => {
+    const row = document.createElement('div');
+    row.className = 'item';
+    row.innerHTML = `<span>${sk.name}</span><span class="pill">耗灵${sk.qi} 速${sk.spd}</span>`;
+    box.append(row);
+  });
+}
+
+// 3. 属性tab内容渲染（简版，详细属性仍可用弹窗）
+function updateAttrsTab() {
+  const box = document.getElementById('attr-list');
+  if (!box) return;
+  const p = GS.player;
+  box.innerHTML = `
+    <div class="item"><span>姓名</span><span class="pill">${p.name}</span></div>
+    <div class="item"><span>境界</span><span class="pill">${p.realm}</span></div>
+    <div class="item"><span>等级</span><span class="pill">Lv.${p.level}（${p.exp}/${p.exp_to_next}）</span></div>
+    <div class="item"><span>生命</span><span class="pill">${p.hp}/${p.hp_max}</span></div>
+    <div class="item"><span>灵力</span><span class="pill">${p.qi}/${p.qi_max}</span></div>
+    <div class="item"><span>魅力</span><span class="pill">${p.charm}</span></div>
+    <div class="item"><span>欲值</span><span class="pill">${p.lust}/100</span></div>
+    <div class="item"><span>堕落度</span><span class="pill">${p.degen}%</span></div>
+    <div class="item"><span>伴侣数</span><span class="pill">${p.partners||0}</span></div>
+  `;
+}
+
+// 4. tab切换时自动刷新内容
+document.querySelector('[data-tab="equips"]').addEventListener('click', updateEquipsTab);
+document.querySelector('[data-tab="skills"]').addEventListener('click', updateSkillsTab);
+document.querySelector('[data-tab="btn-attrs"]').addEventListener('click', updateAttrsTab);
+
+// 5. 启动时也可刷新一次
+updateEquipsTab();
+updateSkillsTab();
+updateAttrsTab();
+// ====== 日常动作 ======
+$('#action-bar').addEventListener('click',e=>{if(!e.target.dataset.act)return;const a=e.target.dataset.act;switch(a){case'meditate':actMeditate();break;case'explore':actExplore();break;case'work':actWork();break;case'commission':actCommission();break;case'talk':openDialogue(randPick(GS.relations.filter(p=>p.loc.includes(GS.loc.split('·')[0]))));break;case'rest':actRest();break;case'seduce':actSeduce();break;case'pleasure':actPleasure();break;case'degen':actDegen();break;case'escape':actEscape();break;}})
+
+function actMeditate(){if(spendQi(3)){say('你端坐打坐，灵息绵延，周身暖流涌动，似有欲火隐现，堕落微增。');gainExp(5);incRngp(6);GS.player.degen+=1;}else say('灵力不足，吐纳未果。');tickTime()}
+function actExplore(){say('你开始探索四周，偶见女子衣衫不整，香臀摇曳，堕落之心蠢动……');const enc=pickEncounter();enc.run();incRngp(10);tickTime();}
+function actWork(){GS.stones+=rndInt(1,4);say('你在客栈/驿站打短工，女掌柜媚眼如丝，丰乳微颤，男客栈主大屌顶起裤裆，你心生堕落欲。');incRngp(5);GS.player.degen+=2;tickTime();}
+function actCommission(){ensureSect();setChoices([{id:201,text:'采药（灵药谷）'},{id:202,text:'清剿（北岭郊外）'},{id:203,text:'护送（商路驿站）'},{id:204,text:'侍寝委托（青楼）'},{id:205,text:'堕落任务（幽冥洞窟）'}]);say('你查看了今日可接的委托，女子地位低下，多有侍寝、堕落之需。');}
+function actRest(){heal(4);GS.player.qi=Math.min(GS.player.qi_max,GS.player.qi+2);say('你小憩片刻，气血与灵息稍复，梦中见美人玉体横陈，小穴湿润，堕落梦魇缠身。');tickTime();}
+function actSeduce(){const npc=randPick(GS.relations.filter(p=>p.gender==='男'&&p.loc===GS.loc));if(npc){GS.player.lust+=5;npc.favor+=Math.floor(GS.player.charm/20);say(`你对${npc.name}抛媚眼，她俏脸微红，美臀轻扭，骚穴微湿，堕落度上升。`);GS.player.degen+=3;}else say('附近无男子可勾引。');incRngp(8);tickTime();}
+function actPleasure(){GS.player.lust=Math.max(0,GS.player.lust-15);GS.player.sensitivity+=1;GS.player.sex_exp+=1;say('你独自泄欲，手探阴穴，喘息连连，香臀颤动，欲火渐消，堕落加深。');incRngp(12);GS.player.degen+=5;tickTime();}
+function actDegen(){GS.player.degen=Math.min(100,GS.player.degen+10);say('你主动寻求堕落，街头自摸骚穴，路人围观，香臀摇曳，阴户蜜汁喷溅。');triggerDegenEvent();tickTime();}
+function actEscape(){if(GS.flags.captured){let escapeChance = 0.3 - (GS.player.degen / 500);if(RNG.roll(escapeChance)){GS.flags.captured = false;GS.loc = '清风镇·客栈';GS.sub_loc = '';say('你成功逃脱俘虏，回到安全处。');}else{say('逃跑失败，被抓回，遭受更惨烈惩罚，大屌轮番插入骚穴，美臀扇肿，堕落暴增，阴户撕裂出血，永留伤痕。');GS.player.degen+=30;GS.player.hp-=15;GS.player.lust+=40;GS.player.sensitivity+=5;GS.statuses.push('阴户永久伤痕');}}tickTime();}
+
+// ====== 艳遇蓄势 ======
+function incRngp(x){GS.flags.rngp=Math.min(100,GS.flags.rngp+(x||0));if(GS.flags.rngp>=100){GS.flags.rngp=0;specialFortune();}}
+function specialFortune(){const txt=['你拾得一枚温热的玉简，上刻“媚骨诀”，研习后欲值+10，堕落+5。','一只灵雀在窗前叩喙，落下一枚媚药散，服用后骚穴湿润，堕落加深。','古井旁冷雾翻涌，你偶遇一男子，大屌插入阴穴，轮番抽插，美臀颤动，高潮连连，堕落暴增。','雾隐村林间，你被群狼围攻，兽根狠插后庭，骚穴喷汁，香臀被爪痕抓满，堕落之心觉醒。','血月林中，邪修施法，你阴户长淫纹，欲火焚身，堕落度飙升。'];say('【艳遇触发】'+randPick(txt));addItem('媚药散',1);gainExp(8);GS.player.lust+=10;GS.player.degen+=rndInt(5,15);}
+
+// ====== 叙事/选项 ======
+const narrative=el('narrative'),choices=el('choices');
+function say(t){narrative.innerHTML+=`<div>${t}</div>`;narrative.scrollTop=narrative.scrollHeight}
+function setChoices(arr){choices.innerHTML='';(arr||[]).forEach((c,i)=>{const b=document.createElement('button');b.className='choice';b.innerHTML=`<b>${i+1}.</b> ${c.text}`;b.onclick=()=>resolveChoice(c.id);choices.append(b)});}
+
+// ====== 时间流逝 ======
+const HOURS=['卯时','辰时','巳时','午时','未时','申时','酉时','戌时','亥时','子时','丑时','寅时'];
+function tickTime(h=1){for(let i=0;i<h;i++){const idx=(HOURS.indexOf(GS.time)+1+HOURS.length)%HOURS.length;GS.time=HOURS[idx];if(GS.time==='子时'){GS.day++;Calendar.nextDay();}tryRandomEvent();GS.player.lust+=rndInt(1,3);GS.player.degen+=rndInt(0,2);}timePassCheck();refresh()}
+function tryRandomEvent(){if(!RNG.roll(.4))return;const e=pickEncounter(true);toast(e.tip||'发生了一件艳事');e.run()}
+if(GS.flags.bully_rate > RNG.next()){
+  const bullyE = {id:'bully_extra',run:()=>{
+    say('额外霸凌事件触发，你被路人群围调戏，美臀被捏，骚穴隐现春光，文艺风情如唐诗“云想衣裳花想容”，却逐步堕落，内心悔恨【怎如此作贱】。');
+    GS.player.degen +=5;
+    if(RNG.roll(0.3)){
+      say('霸凌加剧，你被拖入暗巷，阳具摩擦阴户，美臀拍响，汁液滴落，敏感+1，堕落+5。');
+      GS.player.sensitivity +=1;
+      GS.player.degen +=5;
+    }else if(RNG.roll(0.6)){
+      say('进一步堕落，群人轮奸，大屌插入骚穴，抽插间蜜汁四溅，美臀扇肿，奶子捏青，血液混汁，高潮失禁，性经验+1，堕落+10。');
+      GS.player.sex_exp +=1;
+      GS.player.degen +=10;
+    }else{
+      say('猎奇虐待，你被绑耻辱柱，鞭打奶子血痕斑斑，阴道塞满针刺，痛叫求饶，自残划刀美臀血淋，惨无人道高潮不止，永久伤痕‘鞭印奶子’，堕落+15，随机支线开启。');
+      GS.player.degen +=15;
+      GS.statuses.push('鞭印奶子');
+      setChoices([{id:801,text:'求饶跪舔换休息'},{id:802,text:'反抗战斗（atk>15）'},{id:803,text:'自慰吸引更多人（degen>50）'},{id:804,text:'签奴隶契约'}]);
+    }
+  }};
+  bullyE.run();
+}
+// ====== 遭遇池 ======
+const ENCOUNTERS=[
+  {id:'rumor',weight:3,cond:()=>true,tip:'你听到关于秘境的传闻。',run:()=>say('坊间传言"落星秘境"将启，内有无数美姬侍寝，堕落之源。')},
+  {id:'healer',weight:1,cond:()=>GS.player.hp<GS.player.hp_max,tip:'遇到好心郎中。',run:()=>{toast('郎中为你把脉，目光在你香臀上流连，手指探入骚穴，堕落增。');heal(2);GS.player.degen+=3;}},
+  {id:'merchant',weight:2,cond:()=>GS.loc.includes('大街')||GS.loc.includes('驿站'),tip:'偶遇行商。',run:()=>{const earn=rndInt(1,3);GS.stones+=earn;say('你帮商贩搬货，得灵石'+earn+'，他趁机摸你美臀一把，你俏脸微红，小穴湿润，堕落加深。');GS.player.degen+=4;}},
+  {id:'bandit',weight:1.6,cond:()=>GS.loc.includes('郊外')||GS.loc.includes('密林'),tip:'前方有伏击迹象。',run:()=>battle('bandit')},
+  {id:'wolf',weight:1.3,cond:()=>GS.loc.includes('密林'),tip:'林间传来低嚎。',run:()=>battle('wolf')},
+  {id:'snake',weight:1.0,cond:()=>GS.loc.includes('湖')||GS.loc.includes('谷')||GS.loc.includes('密林'),tip:'草丛窸窣作响。',run:()=>battle('snake')},
+  {id:'ghost',weight:0.5,cond:()=>weather.cur==='雾'&&GS.loc.includes('古井'),tip:'冷雾弥漫。',run:()=>battle('ghost')},
+  {id:'sect-invite',weight:0.7,cond:()=>!hasQuest('玉衡宗入门')&&GS.loc.includes('清风镇'),tip:'一封落款"玉衡宗"的信。',run:()=>startQuest_Sect()},
+  {id:'harass',weight:3.0,cond:()=>GS.player.gender==='女',tip:'路遇登徒子。',run:()=>{say('一男子上前调戏，你香臀被捏，骚穴一紧，欲值+5，堕落+6。');GS.player.lust+=5;GS.player.degen+=6;}},
+  {id:'brothel',weight:2.2,cond:()=>GS.loc.includes('青楼'),tip:'青楼香风扑鼻。',run:()=>{say('你见一女子衣衫半解，玉乳微露，美臀摇曳，邀你入内共欢，你堕落之心涌动。');GS.player.lust+=10;GS.player.degen+=7;}},
+  {id:'rape',weight:1.2,cond:()=>GS.player.gender==='女'&&GS.player.lust>50,tip:'暗巷有人影晃动。',run:()=>{say('你被淫贼拖入巷中，大屌插入骚穴，轮番抽插，美臀颤动，阴户蜜汁四溅，高潮迭起，性经验+1，堕落暴增。');GS.player.sex_exp+=1;GS.player.sensitivity+=2;GS.player.hp-=5;GS.player.lust=0;GS.player.degen+=15;}},
+  {id:'beast_rape',weight:1.0,cond:()=>GS.loc.includes('林')||GS.loc.includes('窟'),tip:'兽吼回荡。',run:()=>{say('你被淫兽扑倒，兽根狠插后庭，骚穴喷汁，香臀被爪痕抓满，堕落深渊一步。');GS.player.hp-=8;GS.player.degen+=12;GS.player.sensitivity+=3;}},
+  {id:'cult_ritual',weight:0.8,cond:()=>GS.loc.includes('渊')||GS.loc.includes('塔'),tip:'邪气弥漫。',run:()=>{say('邪修围住你，轮番侵犯，阳具插入阴穴，精液灌满子宫，你浪叫不止，堕落度飙升。');GS.player.sex_exp+=2;GS.player.degen+=20;GS.player.lust=0;}},
+  {id:'public_humil',weight:1.5,cond:()=>GS.player.degen>30,tip:'街头异动。',run:()=>{say('你不由自主在街头自摸，路人围观，香臀摇曳，阴户暴露，堕落事件触发。');GS.player.degen+=10;GS.player.sensitivity+=2;}},
+  {id:'slave_trade',weight:0.6,cond:()=>GS.player.degen>50&&GS.loc.includes('巷'),tip:'暗市喧哗。',run:()=>{say('你被贩子抓住，拍卖台上裸体展露，骚穴被指探，美臀被拍，买主大屌插入，堕落彻底。');GS.player.degen+=25;GS.player.partners+=1;}}
+];
+function pickEncounter(fromAll){const pool=ENCOUNTERS.filter(e=>e.cond());const tot=pool.reduce((s,e)=>s+e.weight,0);let r=RNG.next()*tot;for(const e of pool){r-=e.weight;if(r<=0){if(fromAll&&e.tip)toast(e.tip);return e}}return pool[0]}
+
+// ====== 关系/对话 ======
+function orientMatch(p){const o=GS.player.orient,g=GS.player.gender,pg=p.gender;if(o==='无性')return false;if(o==='双性')return true;if(o==='异性')return g!==pg;if(o==='同性')return g===pg;return true}
+const LINES={greet:['你好，小娘子身段真妙。','在下久仰，骚穴可紧？','这位贱婢可要侍寝？','小骚货，堕落了多少？'],small:['近日风紧，女子出行易被轮奸。','听说北岭有淫兽出没。','清风镇花魁阴穴多汁。','堕落之路，一步步走。'],rom:['月色正好，愿操你骚穴。','愿与你并肩，阳具插入阴户。','心有灵犀，美臀翘起等大屌。','堕落吧，骚货。']}
+function openDialogue(npc){if(!npc){toast('附近无人可谈');return}el('dlg-npc-name').textContent=npc.name;const log=el('dlg-log');const ch=el('dlg-choices');log.innerHTML=`<div class="pill">位置：${npc.loc}</div><div class="pill">${npc.looks||''}</div>`;function add(t){const d=document.createElement('div');d.textContent=t;log.append(d);log.scrollTop=log.scrollHeight}
+const ops=[{t:'打招呼',run:()=>{add(npc.name+'：'+randPick(LINES.greet));npc.favor+=1;refresh()}},{t:'闲聊',run:()=>{add(npc.name+'：'+randPick(LINES.small));if(RNG.roll(.4))npc.favor+=1;refresh()}},{t:'表达善意（送礼：媚药散）',run:()=>{if((GS.inventory['媚药散']||0)>0){GS.inventory['媚药散']--;npc.favor+=5;add('你赠出媚药散，她服用后骚穴湿润，媚眼流转。');GS.player.charm+=1;refresh()}else add('你身上没有媚药散。')}},{t:'切磋（增信任）',run:()=>{npc.trust+=rndInt(1,3);add('你们略作切磋，她衣衫凌乱，玉乳外露。');refresh()}},{t:'邀请约会',show:()=>orientMatch(npc)&&npc.favor>=30,run:()=>{npc.favor+=2;add('你们共赏灯影，她俏脸红润，美臀轻摆，小穴微湿。');refresh()}},{t:'结为道侣',show:()=>GS.player.age>=14&&!GS.player.married&&orientMatch(npc)&&npc.favor>=60,run:()=>{GS.player.married=true;GS.player.spouse={id:npc.id,name:npc.name,favor:npc.favor,age:npc.age,gender:npc.gender};add('你们互换信物，结为道侣，当夜大屌插入阴穴，抽插不止，高潮连连。');refresh()}},{t:'亲密相伴（可能怀孕）',show:()=>GS.player.married&&GS.player.spouse?.id===npc.id,run:()=>{add('你们相偎而眠，她香臀翘起，骚穴紧裹阳具，蜜汁横流，轮番交合。');tryConceive(npc);gainExp(2);GS.player.sex_exp+=1;GS.player.lust=0;GS.player.degen+=rndInt(5,10);refresh()}},{t:'强迫侍寝',show:()=>npc.gender==='女'&&npc.favor<20,run:()=>{add(`${npc.name}被你按倒，美臀高翘，大屌狠插阴穴，她哭喊不止，骚穴紧缩，性经验+1。`);npc.favor-=10;GS.player.sex_exp+=1;GS.player.sensitivity+=1;GS.player.degen+=8;refresh()}},{t:'堕落诱导',show:()=>GS.player.degen>40&&npc.gender==='女',run:()=>{add(`你引诱${npc.name}堕落，共服媚药，阴穴互磨，香臀相撞，浪叫不止。`);npc.favor+=3;GS.player.degen+=6;refresh()}}];
+ch.innerHTML='';ops.filter(o=>!o.show||o.show()).forEach(o=>{const b=document.createElement('button');b.className='choice';b.textContent=o.t;b.onclick=()=>{o.run();render()};ch.append(b)});showModal('dialogue',true)}
+
+// ====== 生理/怀孕/堕落 ======
+function setupRepro(){const p=GS.player;p.menses.enabled=true;p.pregnancy.enabled=(p.fertile!=='no')}
+function mensesTick(){const p=GS.player;if(!p.menses.enabled||p.pregnancy.pregnant)return;p.menses.day=(p.menses.day%p.menses.cycle)+1;p.menses.bleeding=(p.menses.day<=5);if(p.menses.bleeding){p.menses.comfort=Math.max(0,p.menses.comfort-1);if(p.menses.comfort<=0)p.hp=Math.max(1,p.hp-1);}else p.menses.comfort=0;if(p.menses.bleeding&&p.gender==='女')say('你经血淋漓，小穴隐痛，欲值+5。');p.lust+=5;}
+function fertile(){const p=GS.player;return p.menses.enabled&&!p.pregnancy.pregnant&&p.menses.day>=12&&p.menses.day<=16}
+function tryConceive(npc){const female=GS.player;if(!female||!female.pregnancy.enabled||female.pregnancy.pregnant)return false;let base=fertile()?0.3:0.08;base+=(GS.player.charm||0)*0.01;if(RNG.roll(base)){female.pregnancy.pregnant=true;female.pregnancy.day=1;toast('似有身孕征兆，腹中暖流涌动');say('你感到气机微变，骚穴内似有种子落地。');return true}return false}
+function pregnancyTick(){const p=GS.player;if(!p.pregnancy.enabled||!p.pregnancy.pregnant)return;p.pregnancy.day++;if(p.pregnancy.day%30===0)heal(1);if(p.pregnancy.day>=240){const name=randomName();GS.player.children.push({name,age:0});p.pregnancy.pregnant=false;p.pregnancy.day=0;toast('分娩顺利，母子平安');say('你产下一名婴儿：'+name+'，阴穴撕裂，蜜汁血水混流。')}}
+function degenTick(){if(GS.player.degen>50&&RNG.roll(0.2)){say('堕落之心涌动，你不由自摸骚穴，蜜汁喷溅。');GS.player.lust+=10;}if(GS.player.degen>80&&RNG.roll(0.1)){triggerDegenEvent();}}
+function triggerDegenEvent(){const events=['你堕落加深，街头跪舔路人大屌，精液满面。','幽冥洞窟中，你自愿被邪兽轮奸，后庭灌满兽精。','淫魔塔内，你求邪修纹身淫纹，小穴永湿。','血月林，你公开自慰，引群狼侵犯，堕落巅峰。'];say(randPick(events));GS.player.degen+=rndInt(5,10);GS.player.sensitivity+=2;GS.player.sex_exp+=1;}
+
+// ====== 数值成长 ======
+function heal(v) {
+    GS.player.hp = Math.min(GS.player.hp_max, GS.player.hp + v);
+    if (v > 0) {
+        const healMessages = [
+            '你周身气血涌动，伤口渐合，肌肤恢复光滑如玉，香臀微颤，内心独白【这股暖流如春风拂柳，让本宫的骚穴隐隐作痒，真是反差，表面纯洁内心却渴望大屌插入】。',
+            '愈疗之力流转全身，伤痕消退，玉体焕发光泽，美臀轻摇，内心呢喃【暖意如情郎爱抚，本宫纯洁外表下，竟渴望被粗鲁侵犯，骚穴湿润难耐】。',
+            '气血复苏，创口愈合，肌肤细腻如初，翘臀颤动，内心自语【这治愈似温柔拥抱，却激发本宫淫欲，反差婊般想被大屌猛捅】。',
+            '生命力涌现，伤痛消散，身躯光滑诱人，臀部微动，内心低吟【如沐春风的愈合，让本宫内心骚动，表面贞洁却渴求轮奸羞辱】。'
+        ];
+        say(randPick(healMessages));
+        if (RNG.roll(0.2) && GS.player.charm > 50) {
+            const charmBonusMessages = [
+                '愈合中魅力加成，玉乳更丰满，粉红乳头挺立，微表情俏脸红润，神态娇媚。',
+                '魅力提升，乳房饱满晃动，乳晕粉嫩翘起，脸庞羞红，眼神妩媚动人。',
+                '额外魅力增长，胸脯丰盈摇曳，乳头硬挺诱人，表情微妙红晕，神情娇羞欲滴。',
+                '愈疗加持魅力，玉峰丰润颤动，粉头坚挺，俏脸泛红，姿态媚态毕现。'
+            ];
+            say(randPick(charmBonusMessages));
+            GS.player.charm += 1;
+        } else if (RNG.roll(0.1) && GS.player.degen > 30) {
+            const degenFailMessages = [
+                '堕落影响愈合，阴户湿润蜜汁滴落，美臀摇曳，随机失败hp-2。',
+                '淫欲干扰治愈，骚穴分泌淫液，翘臀扭动，意外扣血2点，欲火更盛。',
+                '堕落值高导致反噬，下体湿滑汁水流淌，臀部晃荡，hp意外减2。',
+                '负面影响发作，私处潮湿滴落，玉臀摆动，愈合失败损失2血。'
+            ];
+            say(randPick(degenFailMessages));
+            GS.player.hp -= 2;
+            GS.player.lust += 5;
+        }
+    }
+    refresh();
+}
+
+function spendQi(v) {
+    if (GS.player.qi >= v) {
+        GS.player.qi -= v;
+        const spendMessages = [
+            '灵力如江河决堤，周身空虚，骚穴一紧，内心悔恨【本宫怎如此浪费，似那淫妇般欲火焚身】。',
+            '真元耗损如洪水奔流，身体虚弱，下体收缩，内心自责【浪费灵力如自甘堕落，本宫竟如荡妇般饥渴】。',
+            '齐力流失，周身疲惫，阴道紧缩，悔恨低语【这消耗似纵欲过度，让本宫内心淫乱不堪】。',
+            '灵气外泄如决口大坝，空虚感袭来，骚穴抽动，内心懊恼【本宫怎这般挥霍，犹如淫女求欢】。'
+        ];
+        say(randPick(spendMessages));
+        if (RNG.roll(0.3) && GS.player.degen > 40) {
+            const degenSuccessMessages = [
+                '堕落随机成功，欲值+10，敏感+1，动作微颤，神态迷离。',
+                '淫欲加剧，lust增10，敏感度升1，身躯颤抖，眼神朦胧迷乱。',
+                '负面随机触发，欲望飙升10点，敏感加1，肢体轻颤，表情恍惚。',
+                '堕落影响显现，lust+10，sensitivity+1，身体抖动，神情失神。'
+            ];
+            say(randPick(degenSuccessMessages));
+            GS.player.lust += 10;
+            GS.player.sensitivity += 1;
+            return true;
+        } else if (RNG.roll(0.15)) {
+            const failMessages = [
+                '花费失败，灵力反弹，hp-3，香臀疼痛如鞭打。',
+                '真元反噬，损失3血，美臀火辣如被抽打，痛楚难忍。',
+                '消耗出错，齐力逆流，hp扣3，翘臀灼痛似鞭挞。',
+                '失败反弹，生命减3，臀部剧痛如遭鞭刑。'
+            ];
+            say(randPick(failMessages));
+            GS.player.hp -= 3;
+            return false;
+        }
+        refresh();
+        return true;
+    }
+    return false;
+}
+
+function gainExp(v) {
+    GS.player.exp += v;
+    const expMessages = [
+        '经验如潮水涌入，你境界隐隐松动，长发飘荡，玉体生辉，美臀翘起，穿着鱼网丝袜的双腿诱人，内心独白【这增长如唐诗春风得意，却让本宫骚穴湿润，反差婊般渴望轮奸】。',
+        '修为暴增如江河入海，境界动摇，秀发飞扬，身躯光芒四射，翘臀高挺，丝袜美腿撩人，内心低吟【经验如诗词华丽，却激发本宫淫心，表面纯洁内心求辱】。',
+        'exp涌入如浪潮，层次松动，长发舞动，肌肤闪耀，臀部挺翘，双腿丝袜诱惑，内心自语【这进步似宋词优雅，本宫却湿了下体，反差般渴求群交】。',
+        '经验注入如洪流，境界微颤，发丝飘逸，玉体发光，美臀上扬，鱼网腿部迷人，内心呢喃【增长如春风得意马蹄疾，却让骚穴痒难耐，纯女淫心】。'
+    ];
+    say(randPick(expMessages));
+    while (GS.player.exp >= GS.player.exp_to_next) {
+        GS.player.exp -= GS.player.exp_to_next;
+        GS.player.level++;
+        GS.player.exp_to_next = Math.floor(GS.player.exp_to_next * 1.4) + 5;
+        GS.player.realm = realm(GS.player.level);
+        GS.player.hp_max += 5;
+        GS.player.qi_max += 3;
+        GS.player.hp = GS.player.hp_max;
+        GS.player.qi = GS.player.qi_max;
+        GS.player.charm += 1;
+        const levelUpMessages = [
+            '境界突破：' + GS.player.realm + ',魅力增',
+            '层次跃升至' + GS.player.realm + '，魅力值加成。',
+            '突破成功：' + GS.player.realm + '，魅力提升。',
+            '修为进阶' + GS.player.realm + '，魅力+1。'
+        ];
+        toast(randPick(levelUpMessages));
+        const breakthroughMessages = [
+            '突破瞬间，周身光华绽放，乳房微微起伏，粉红乳头因兴奋硬挺，微表情眉眼含春，神态从容却内心淫荡，随机加成atk+2，def+1。',
+            '晋级一刻，光芒爆射，玉乳颤动，乳头挺立兴奋，眼神含情脉脉，姿态优雅内心浪荡，额外atk+2 def+1。',
+            '境界升华，周身辉耀，胸脯起伏，粉头坚硬，眉眼春意，神情淡定却心骚，随机增atk2 def1。',
+            '突破闪耀，全身光芒，乳房抖动，乳晕翘起，微妙表情含春，态度平静内心欲乱，加成atk+2 def+1。'
+        ];
+        say(randPick(breakthroughMessages));
+        GS.player.atk += 2;
+        GS.player.def += 1;
+        if (RNG.roll(0.4) && GS.player.charm > 60) {
+            const charmGrowthMessages = [
+                '魅力高，额外成长，玉乳丰满摇晃，骚穴隐现春光，堕落随机+3。',
+                '高魅力加持，胸部饱满晃荡，下体春光乍现，degen意外增3。',
+                '魅力值优，额外发育，玉峰丰盈颤动，阴户露光，堕落+3随机。',
+                '魅惑强，成长加成，乳房丰润摇曳，骚处隐约，degen+3。'
+            ];
+            say(randPick(charmGrowthMessages));
+            GS.player.degen += 3;
+        } else if (RNG.roll(0.2)) {
+            const growthFailMessages = [
+                '成长失败，境界不稳，hp_max-2，内心悔恨【本宫怎如此脆弱，如那被大屌操烂的淫妇】。',
+                '进阶出错，层次动摇，hp_max扣2，自责【本宫弱如被操翻的荡妇，悔恨不已】。',
+                '失败成长，境界不固，最大血减2，内心懊恼【怎这般不堪，似淫女被大棒摧毁】。',
+                '发育受阻，稳固失败，hp_max-2，悔恨低语【本宫脆弱如婊子被轮】。'
+            ];
+            say(randPick(growthFailMessages));
+            GS.player.hp_max -= 2;
+        }
+    }
+    if (GS.player.level % 5 === 0) {
+        const milestoneMessages = [
+            '每5级里程碑，随机解锁新技能“欲火掌”，dmg[8,15]，但使用后lust+10。',
+            '5级标志，意外获得“欲火掌”技能，伤害8-15，使用增lust10。',
+            '里程碑达成，解锁“欲火掌”，dmg范围8至15，代价lust+10。',
+            '每五级一碑，新招“欲火掌”加入，8-15伤，但欲望升10。'
+        ];
+        say(randPick(milestoneMessages));
+        GS.player.skills.push({id: 'firepalm', name: '欲火掌', qi: 5, dmg: [8, 15], spd: 6, desc: '掌出欲火焚敌。'});
+    }
+    refresh();
+}
+
+function realm(l) {
+    let desc = '';
+    if (l < 4) {
+        const lowRealmMessages = [
+            `练气${l}层，灵气初凝，你肌肤更嫩，香臀圆润，内心【境界低微，却欲念萌生，反差如纯女遇淫贼】。`,
+            `气练${l}层，真元初聚，皮肤细腻，翘臀丰满，内心低语【低阶却淫心初动，贞洁外表下如遇贼子】。`,
+            `炼气${l}阶，灵力凝结，玉肤嫩滑，美臀圆润，自语【微弱境界激发欲火，反差纯女淫贼】。`,
+            `初炼气${l}，气凝肤嫩，臀部饱满，内心【低微却萌生浪意，如淑女逢歹徒】。`
+        ];
+        desc = randPick(lowRealmMessages);
+    } else if (l < 7) {
+        const midRealmMessages = [
+            `炼体${l-3}段，体魄强健，玉乳坚挺，微动作摇曳生姿，神态优雅。`,
+            `体炼${l-3}段，躯体健壮，胸脯挺拔，动作晃动诱人，姿态高雅。`,
+            `炼体${l-3}阶，身体强韧，玉峰坚实，摇曳姿势，神情文静。`,
+            `中炼体${l-3}，体健乳挺，微动生姿，优雅神态。`
+        ];
+        desc = randPick(midRealmMessages);
+    } else if (l < 10) {
+        desc = '筑基前期，根基稳固，骚穴紧致，魅力随机+2。';
+        GS.player.charm += 2;
+    } else if (l < 13) {
+        desc = '筑基中期，灵力充盈，堕落易增，内心独白【突破如高潮，浪叫不止】。';
+    } else {
+        desc = '筑基后期，真元圆满，美貌巅峰，随机事件率+10%。';
+        GS.flags.event_rate += 0.1;
+    }
+    say(desc);
+    return desc;
+}
+
+function addItem(n, amt = 1) {
+    GS.inventory[n] = (GS.inventory[n] || 0) + amt;
+    const addMessages = [
+        '获得物品' + n + ' x' + amt + '，你玉手轻握，乳房微颤，内心【这宝物如阳具般诱人，本宫这竟然像婊子般想自慰】。',
+        '物品入囊' + n + '×' + amt + '，纤手执物，胸脯抖动，自语【宝贝似大屌撩人，本宫竟如淫妇欲自渎】。',
+        '新增' + n + ' ' + amt + '个，手持轻颤，玉乳起伏，内心【这物如阴茎诱惑，婊子般想手淫】。',
+        '获取' + n + '×' + amt + '，握物乳颤，悔恨【宝如阳物，本宫浪心想自慰】。'
+    ];
+    say(randPick(addMessages));
+    if (RNG.roll(0.2) && n.includes('丹')) {
+        const successMessages = [
+            '随机成功，额外效果lust+5。',
+            '意外加成，欲望增5。',
+            '成功触发，lust升5点。',
+            '额外lust+5随机。'
+        ];
+        say(randPick(successMessages));
+        GS.player.lust += 5;
+    } else if (RNG.roll(0.1)) {
+        const failMessages = [
+            '添加失败，物品损坏，degen+2。',
+            '物品破损，堕落值加2。',
+            '失败丢失，degen升2。',
+            '损坏随机，degen+2。'
+        ];
+        say(randPick(failMessages));
+        GS.inventory[n] -= 1;
+        GS.player.degen += 2;
+    }
+    refresh();
+}
+
+function randomName() {
+    const f = ['李', '王', '赵', '孙', '周', '苏', '沈', '林', '闻', '谢', '顾', '秦', '白', '江'];
+    const g = ['晓', '婉', '岚', '凝', '烟', '舟', '墨', '辞', '笙', '衡', '晚', '霁', '疏', '影'];
+    const name = randPick(f) + randPick(g);
+    const nameMessages = [
+        '随机姓名' + name + '，文艺如宋词“晓风残月”，却内心淫荡。',
+        '生成名字' + name + '，诗意似“柳永词”，内心却浪荡不堪。',
+        '新名' + name + '，优雅如古诗，却心骚动欲。',
+        '姓名随机' + name + '，文艺风却淫心毕现。'
+    ];
+    say(randPick(nameMessages));
+    return name;
+}
+
+// ====== 战斗 ======
+const Battle = { active: false, round: 1, enemy: null, me: { hp: 0, qi: 0 }, timeline: [], log: [], loc: '' };
+
+function battle(id) {
+    const e = GS.bestiary.find(x => x.id === id);
+    if (!e) return;
+    const battleStartMessages = [
+        '战斗开始，你长裙飘扬，玉足如尤物般诱人，美臀翘起，神态警惕着对方，内心想着【这敌如大屌般凶猛，本宫却想被大屌猛操】。',
+        '开战一刻，长裙飞舞，美足撩人，翘臀挺立，警觉神情，内心低语【敌人似粗棒，本宫渴望被插】。',
+        '战火点燃，裙摆荡漾，玉腿诱惑，臀部高翘，警惕姿态，自语【敌如阳具凶狠，本宫淫心想被干】。',
+        '战斗爆发，飘逸长裙，足部尤物，香臀翘起，神态防备，内心【这对手如大鸡巴，本宫反差求操】。',
+        '敌袭来临，你脱下外衣求饶【主人饶命，本宫愿做母狗，脱衣任操】，但敌无动于衷，继续攻击。',
+        '战中崩溃，你跪地求饶【求求你别打了，本宫自脱丝袜，让你玩弄骚穴】，敌方狞笑不止。',
+        '被打羞辱，你哭喊【不要再扇奶子了，本宫是贱婊，愿跪舔大屌求饶】。',
+        '战斗中你崩溃脱衣【本宫脱光衣服，翘臀求插，饶命啊主人】。'
+    ];
+    say(randPick(battleStartMessages));
+    Battle.active = true;
+    Battle.round = 1;
+    Battle.enemy = JSON.parse(JSON.stringify(e));
+    Battle.me = { hp: GS.player.hp, qi: GS.player.qi };
+    Battle.loc = GS.loc;
+    Battle.timeline = [];
+    Battle.log = [];
+    openBattle();
+    rollTL();
+    renderBattle();
+    if (RNG.roll(0.2) && GS.player.degen > 50) {
+        const degenDebuffMessages = [
+            '堕落影响，战斗随机减atk-2。',
+            '淫欲干扰，atk扣2点。',
+            '负面发作，攻击力减2。',
+            'degen高导致atk-2随机。'
+        ];
+        say(randPick(degenDebuffMessages));
+        GS.player.atk -= 2;
+    }
+}
+
+function rollTL() {
+    Battle.timeline.length = 0;
+    const meSpd = 6 + (GS.player.skills.reduce((m, s) => Math.max(m, s.spd || 0), 0)) / 10;
+    const enSpd = Battle.enemy.spd;
+    for (let i = 0; i < 10; i++) {
+        Battle.timeline.push({ who: 'me', at: Math.random() * meSpd });
+        Battle.timeline.push({ who: 'en', at: Math.random() * enSpd });
+    }
+    Battle.timeline.sort((a, b) => a.at - b.at);
+    const tlMessages = [
+        '行动顺序如宋词“东风恶”，随机若GS.player.charm>70，meSpd+1。',
+        '顺序生成似诗词阴郁，若魅力超70，速度加1随机。',
+        'timeline如“东风恶欢情薄”，charm>70时meSpd+1。',
+        '行动线文艺诗意，若charm高，spd增1。'
+    ];
+    say(randPick(tlMessages));
+    if (GS.player.charm > 70) meSpd += 1;  // Note: This is after calculation, might need adjustment, but keeping logic.
+}
+
+function openBattle() {
+    showModal('battle', true);
+    el('battle-loc').textContent = Battle.loc;
+    el('round-num').textContent = Battle.round;
+    el('battle-close').disabled = true;
+    fillBattleSkills();
+    const openMessages = [
+        '战场开启，你姿势优雅，乳房起伏，微表情眉蹙，内心心想【战斗如性交，好想被操到高潮】。',
+        '战局打开，优雅姿态，胸脯颤动，眉眼微皱，自语【打斗似交合，本宫渴求高潮】。',
+        '开启战斗，曼妙姿势，玉乳抖动，表情蹙眉，内心【战如做爱，想被干翻】。',
+        '战场现身，优雅身姿，乳房起伏，微妙眉蹙，内心【这如性爱，求操至巅峰】。',
+        '开战崩溃，你求饶【主人，本宫愿脱衣跪舔，饶过贱奴吧】。',
+        '被羞辱中，你脱裙【别打了，本宫自脱求饶，让你玩奶子】。'
+    ];
+    say(randPick(openMessages));
+}
+
+function renderBattle() {
+    el('me-hp').textContent = `${Battle.me.hp}/${GS.player.hp_max}`;
+    el('me-qi').textContent = `${Battle.me.qi}/${GS.player.qi_max}`;
+    el('en-name').textContent = Battle.enemy.name;
+    el('en-hp').textContent = `${Battle.enemy.hp}`;
+    const tl = el('timeline');
+    tl.innerHTML = '';
+    Battle.timeline.slice(0, 10).forEach(n => {
+        const c = document.createElement('span');
+        c.className = 'chip ' + (n.who === 'me' ? 'me' : '');
+        c.textContent = n.who === 'me' ? '我' : '敌';
+        tl.append(c);
+    });
+    el('battle-log').innerHTML = Battle.log.map(x => `<div>${x}</div>`).join('');
+    const renderMessages = [
+        '战场渲染，你动作迅捷，香臀扭动，长发飞舞，神态专注。',
+        '画面更新，迅猛动作，翘臀摆动，秀发乱舞，神情集中。',
+        '渲染战局，快捷身法，美臀摇曳，发丝飞扬，专注姿态。',
+        '战场重绘，敏捷姿势，臀部扭动，长发飘荡，神态专心。',
+        '渲染中被打，你哭喊【啊！别扇臀了，本宫是贱货，求饶】。',
+        '羞辱渲染，你崩溃【主人饶命，本宫脱光任操】。'
+    ];
+    say(randPick(renderMessages));
+    if (RNG.roll(0.1)) {
+        const visualMessages = [
+            '随机视觉，敌方大屌暴露，内心独白【这阳物如此粗长，本宫要是战败，必然被此物干昏过去】。',
+            '意外画面，敌人阴茎显露，自语【粗长大棒，若败必被操晕】。',
+            '视觉随机，敌大屌现身，内心【这物凶猛，败北必昏厥】。',
+            '暴露随机，阳具粗大，悔恨【战败定被干翻】。',
+            '视觉中求饶【看到大屌，本宫愿跪舔求不打】。'
+        ];
+        say(randPick(visualMessages));
+    }
+}
+
+function bLog(m) {
+    Battle.log.push(m);
+    renderBattle();
+    const logMessages = [
+        '战斗日志：' + m + '，你表情痛楚，玉体颤动，骚穴隐隐作湿，纯洁外表内心淫荡不止。',
+        '日志添加：' + m + '，痛表情，身躯抖动，下体湿润，贞洁外淫心。',
+        '记录' + m + '，痛苦神情，玉体颤，骚处潮湿，反差淫荡。',
+        'log：' + m + '，痛楚脸庞，身抖穴湿，纯外浪内。',
+        '日志中被辱，你求【别记录了，本宫脱衣崩溃求饶】。'
+    ];
+    say(randPick(logMessages));
+}
+
+function fillBattleSkills() {
+    const box = el('battle-skills');
+    box.innerHTML = '';
+    GS.player.skills.forEach(sk => {
+        const b = document.createElement('button');
+        b.className = 'choice';
+        b.innerHTML = `<b>${sk.name}</b>（耗灵${sk.qi} 速${sk.spd}）`;
+        b.onclick = () => useSkill(sk);
+        if (sk.qi > Battle.me.qi) b.setAttribute('disabled', '');
+        box.append(b);
+    });
+    const fillMessages = [
+        '技能填充，你手势优雅，指尖如兰，内心【这些招式如做爱般销魂】。',
+        '招式加载，优雅手势，兰花指尖，自语【技能似交合销魂】。',
+        '填充技能，曼妙手姿，指如幽兰，内心【招如性爱迷人】。',
+        '技能注入，优雅指势，内心【如做爱般勾魂】。',
+        '填充中崩溃【技能太多，本宫愿脱丝袜求不战】。'
+    ];
+    say(randPick(fillMessages));
+    if (RNG.roll(0.25) && GS.player.degen > 60) {
+        const extraSkillMessages = [
+            '堕落随机，额外技能“媚惑击”，dmg[0,0]但敌spd-2。',
+            '淫欲触发，新招“媚惑击”，无伤但敌速减2。',
+            '随机加“媚惑击”，伤害0但spd敌-2。',
+            'degen高解锁“媚惑击”，敌速降2无dmg。'
+        ];
+        say(randPick(extraSkillMessages));
+        GS.player.skills.push({id: 'charmhit', name: '媚惑击', qi: 2, dmg: [0, 0], spd: 8, desc: '媚眼降低敌速。'});
+    }
+}
+
+function useSkill(sk) {
+    if (!Battle.active) return;
+    if (Battle.me.qi < sk.qi) {
+        bLog('灵力不足。');
+        const qiFailMessages = [
+            '使用失败，你气血翻涌，雪白的奶子摇晃，内心悔恨【灵力如欲火，灵力不足怎能御敌】。',
+            '齐不足，血气涌动，白乳颤，自责【真元少如欲不足，怎敌】。',
+            '失败施展，翻涌气血，奶子晃动，悔恨【灵如火，缺怎战】。',
+            '不足使用，涌动血气，雪乳摇，内心【欲火般灵少御敌难】。',
+            '失败中求饶【灵力不够，本宫脱衣跪求饶命】。',
+            '被打崩溃【啊！齐不足，别打了，本宫是母狗】。'
+        ];
+        say(randPick(qiFailMessages));
+        return;
+    }
+    Battle.me.qi -= sk.qi;
+    let plus = GS.flags.atkPlus || 0;
+    const dmg = rndInt(sk.dmg[0] + plus, sk.dmg[1] + plus);
+    if (dmg > 0) {
+        Battle.enemy.hp = Math.max(0, Battle.enemy.hp - dmg);
+        bLog(`你施展【${sk.name}】，造成 ${dmg} 伤害。`);
+        const successMessages = [
+            '技能成功，你姿势曼妙，长裙飞扬，美臀翘起，微表情得意，内心【这击如被大屌插入，爽快】。',
+            '施展成功，曼妙身姿，裙摆飞，美臀挺，得意表情，自语【一击似大棒入，舒爽】。',
+            '招式命中，优雅姿态，长裙荡，翘臀起，微妙得意，内心【如被操般快感】。',
+            '成功击出，姿势撩人，飞扬裙，臀翘表情傲，内心【插入般爽】。',
+            '成功后羞辱【敌中招，本宫愿被你操，但先赢】。'
+        ];
+        say(randPick(successMessages));
+    }
+    if (sk.buff?.shield) {
+        GS.statuses.push(`护体（${sk.buff.shield}）`);
+        bLog('护体光幕升起。');
+        const shieldMessages = [
+            '护盾升起，文艺如“水光潋滟晴方好”，却内心淫荡想被破盾操穴。',
+            '光幕护体，诗意似晴光水滟，自语【淫心想盾破被插】。',
+            '升起护体，如诗词美好，却浪荡内心求破操。',
+            '盾现文艺，却内心【破盾后骚穴任操】。',
+            '盾起求饶【护体了，但本宫仍愿脱衣求不破】。'
+        ];
+        say(randPick(shieldMessages));
+    }
+    if (sk.id === 'seduce') {
+        Battle.enemy.spd -= 1;
+        bLog('敌人被诱惑，速度降低，目光在你香臀上流连。');
+        const seduceMessages = [
+            '你抛媚眼，诱惑成功，敌方目光痴迷，你乳头硬挺，对方立马就干了上了，你表面假装抵抗，但内心求操。',
+            '媚眼抛出，成功迷敌，眼神痴呆，乳头翘，对方扑上，假抵抗内心渴求。',
+            '诱惑中，敌速降，目光臀流，你乳坚，对方干，表面抗内心操。',
+            '成功媚惑，spd敌减，痴迷目光，挺乳头，扑上假拒求插。',
+            '诱惑中崩溃【敌迷了，本宫愿被操，但求饶别太狠】。'
+        ];
+        say(randPick(seduceMessages));
+    }
+    enemyAct();
+    checkEnd();
+    renderBattle();
+    fillBattleSkills();
+    if (RNG.roll(0.4) && GS.player.charm > 80) {
+        const extraDmgMessages = [
+            '魅力高，随机额外dmg+3。',
+            '高魅加伤3随机。',
+            '魅力优，dmg增3。',
+            '随机伤+3因charm。'
+        ];
+        say(randPick(extraDmgMessages));
+        Battle.enemy.hp -= 3;
+    } else if (RNG.roll(0.2) && GS.player.degen > 70) {
+        const degenEffectMessages = [
+            '堕落影响，使用后lust+10，敏感+1。',
+            '淫欲发作，lust升10 sensitive+1。',
+            '负面使用，欲望+10 敏感增1。',
+            'degen高，lust+10 sensitivity+1。'
+        ];
+        say(randPick(degenEffectMessages));
+        GS.player.lust += 10;
+        GS.player.sensitivity += 1;
+    }
+}
+
+function enemyAct() {
+    if (!Battle.active) return;
+    const ed = rndInt(Battle.enemy.atk[0], Battle.enemy.atk[1]);
+    Battle.me.hp = Math.max(0, Battle.me.hp - ed);
+    bLog(`${Battle.enemy.name} 攻击，造成 ${ed} 伤害。`);
+    const enemyAttackMessages = [
+        '敌人攻来，你玉体闪躲，长发乱舞，神态惊慌，内心【这下痛击如被阳具狠捅，悔恨却兴奋】。',
+        '敌击袭来，玉身躲闪，秀发乱，神情慌，自语【痛如大棒捅，悔兴】。',
+        '攻击敌至，身闪发舞，慌张态，内心【狠捅似阳具，悔恨兴奋】。',
+        '敌扑来，躲闪乱发，惊神，内心【如被插狠，悔却爽】。',
+        '被打羞辱，你哭【啊！别打奶子了，本宫求饶，脱衣任玩】。',
+        '敌击崩溃，你求【主人饶命，本宫是贱奴，被打到崩溃】。',
+        '痛击中脱衣【别再打了，本宫自脱求不辱】。',
+        '被辱求饶【大屌主人，本宫跪舔求饶，别扇臀了】。'
+    ];
+    say(randPick(enemyAttackMessages));
+    if (RNG.roll(0.3) && GS.player.def < 10) {
+        const lowDefMessages = [
+            '防御低，随机额外伤害+2，奶子被击中青肿。',
+            'def低加伤2，乳房青肿击中。',
+            '低防随机+2dmg，奶子肿。',
+            '防御弱，伤+2乳青。'
+        ];
+        say(randPick(lowDefMessages));
+        Battle.me.hp -= 2;
+    } else if (RNG.roll(0.15) && GS.player.charm > 50) {
+        const highCharmMessages = [
+            '魅力高，敌分心，伤害-1。',
+            '魅优敌散，dmg减1。',
+            '高charm，分心伤-1。',
+            '魅力敌乱，伤害降1。'
+        ];
+        say(randPick(highCharmMessages));
+        Battle.me.hp += 1;
+    }
+}
+
+function checkEnd() {
+    if (Battle.enemy.hp <= 0) {
+        bLog('战斗胜利！');
+        const winMessages = [
+            '胜利一刻，你姿势优雅擦汗，玉乳起伏，微表情得意，内心【敌如败犬，本宫想骑乘其尸自慰】。',
+            '获胜瞬间，优雅拭汗，胸颤得意表情，自语【败敌如犬，想骑尸自渎】。',
+            '胜了，姿态曼妙汗擦，玉乳抖，傲娇脸，内心【敌犬般，本宫欲骑尸手淫】。',
+            '胜利优雅，起伏乳，微妙得意，内心【败犬敌，想自慰骑尸】。'
+        ];
+        say(randPick(winMessages));
+        finishBattle(true);
+    } else if (Battle.me.hp <= 0) {
+        bLog('你力竭倒地……');
+        const loseMessages = [
+            '败北瞬间，你倒地裸露，剩下破烂不堪的衣裳也被扒的一干二净，骚穴滴落着淫汁，美臀颤动，你抽搐不止，神态绝望，内心悔恨【本宫怎败下，似被轮奸般耻辱】。',
+            '失败一刻，倒地全裸，衣碎扒光，下体汁滴，翘臀抖，痉挛绝望，神悔【败如轮奸耻】。',
+            '力竭倒下，裸露扒衣，淫液落，臀颤抽搐，绝望态，自责【怎的败了，似群交辱】。',
+            '败地裸，衣破净，穴滴臀动，颤绝望，内心【败下如被奸耻辱】。',
+            '败北崩溃求饶【主人，本宫败了，求大屌插入饶命】。',
+            '倒地羞辱【别扒衣了，本宫愿做母狗，被轮到崩溃】。'
+        ];
+        say(randPick(loseMessages));
+        finishBattle(false);
+    }
+}
+
+function finishBattle(win) {
+    Battle.active = false;
+    el('battle-close').disabled = false;
+    if (win) {
+        Battle.enemy.drops?.forEach(([it, p, a]) => {
+            if (RNG.roll(p)) {
+                addItem(it, a);
+                bLog('获得掉落：' + it + ' x' + a);
+            }
+        });
+        gainExp(4 + rndInt(0, 3));
+        GS.stones += rndInt(0, 3);
+        if (Battle.enemy.id === 'rapist') {
+            const rapistWinMessages = [
+                '击败淫贼，你趁机骑乘其阳具，骚穴紧裹，大屌抽插，泄欲高潮。',
+                '胜贼骑乘，大棒入穴，紧裹抽插，高潮泄。',
+                '淫贼败，你骑阳物，骚处裹，插至巅峰。',
+                '击败后骑，穴紧屌抽，欲泄潮。'
+            ];
+            say(randPick(rapistWinMessages));
+        }
+        GS.player.lust -= 10;
+        if (RNG.roll(0.25) && GS.player.degen > 60) {
+            const degenGrowthMessages = [
+                '胜利随机，堕落线成长，境界+1但lust+15。',
+                '胜后degen成长，level+1 lust升15。',
+                '随机淫线，境界增1欲望+15。',
+                '胜利degen，+1level +15lust。'
+            ];
+            say(randPick(degenGrowthMessages));
+            GS.player.level += 1;
+            GS.player.lust += 15;
+        }
+    } else {
+        GS.flags.captured = true;
+        GS.flags.captured_loc = Battle.loc;
+        GS.sub_loc = '牢房';
+        GS.loc = Battle.loc;
+        const capturedMessages = [
+            '战斗失败，你被俘虏，关入' + GS.sub_loc + '，这小女子果真是个母狗，大屌轮番插入骚穴，奶子被扇的青肿，堕落增。',
+            '败俘入牢，这女子如狗，轮插入穴，乳扇肿，degen加。',
+            '失败被捉，关牢母狗，大棒轮穴，奶青肿，堕落升。',
+            '俘虏失败，牢中狗般，插轮骚处，扇乳肿，增degen。',
+            '俘虏羞辱【关牢后，本宫愿脱衣求轮奸】。',
+            '败北崩溃【牢中本宫是贱奴，求大屌辱到崩溃】。'
+        ];
+        say(randPick(capturedMessages));
+        GS.player.degen += 15;
+        GS.player.hp = GS.player.hp_max / 2;
+        updateCaptured();
+        if (RNG.roll(0.4) && GS.player.charm > 70) {
+            const charmCapturedMessages = [
+                '魅力值高，成为俘虏被随机拍卖，美貌吸引买主群交',
+                '高魅拍卖，俘美引群交。',
+                '这小女子长得还真是不错，吸引买家轮。',
+                '随机拍卖，高美群交引。',
+                '拍卖中求饶【买主们，本宫愿跪舔大屌求不卖】。'
+            ];
+            say(randPick(charmCapturedMessages));
+            GS.player.lust += 3;
+        } else if (RNG.roll(0.2)) {
+            const brandMessages = [
+                '这母狗真是一条烂货，说罢就被对方用滚烫的烙铁，兹-拉-一声烙下一道永久耻辱 败北雌兽 于奶子。',
+                '烂狗烙铁兹拉，永久辱败北雌兽乳上。',
+                '贱货烫铁，耻辱烙败雌兽奶子。',
+                '母狗烙兹，永辱败北兽于胸。',
+                '烙中崩溃【啊！别再烙我了，本宫求饶做雌兽，做雌兽还不行吗？】。'
+            ];
+            say(randPick(brandMessages));
+            GS.statuses.push('败北雌兽');
+        }
+    }
+    GS.player.hp = Battle.me.hp;
+    GS.player.qi = Battle.me.qi;
+    refresh();
+    if (!win && RNG.roll(0.3)) {
+        const loseGrowthMessages = [
+            '败北随机，魅惑线成长，charm+2但degen+10。',
+            '失败魅线，charm增2 degen升10。',
+            '随机败成长，+2charm +10degen。',
+            '魅惑败，charm+2 degen+10。'
+        ];
+        say(randPick(loseGrowthMessages));
+        GS.player.charm += 2;
+        GS.player.degen += 10;
+    }
+}
+
+el('btn-defend').onclick = () => {
+    bLog('你专注防御。');
+    Battle.me.hp = Math.min(GS.player.hp_max, Battle.me.hp + 1);
+    enemyAct();
+    checkEnd();
+    renderBattle();
+    const defendMessages = [
+        '防御姿势如“水幕天华”，玉体护盾闪耀着光辉，内心心想【防御时内心怎却如此躁动不安，脸颊微红如魅了一般】。',
+        '防如水幕，身盾辉，内心【防中躁动不安，脸红如媚】。',
+        '姿态防御诗意，护耀光，自语【内心躁动不安，脸红如魅】。',
+        '如天华水，玉辉盾，内心【防御时却骚动不止，脸颊微红】。',
+        '防御求饶【防御住了，但本宫愿脱衣，只求对反不要再打我了】。'
+    ];
+    say(randPick(defendMessages));
+    if (RNG.roll(0.2)) {
+        say('防御成功，随机def+1。');
+        GS.player.def += 1;
+    }
+};
+
+el('btn-flee').onclick = () => {
+    if (RNG.roll(0.5)) {
+        bLog('你成功脱战。');
+        finishBattle(false);
+        const fleeSuccessMessages = [
+            '逃跑成功，长裙飞扬，香臀扭动，神态慌张，内心【逃如被追操，悔恨却湿了】。',
+            '脱成功，裙飞臀扭，慌神，自语【追操般逃，悔湿】。',
+            '跑成，飞扬裙，扭臀慌态，内心【如被操追，恨却潮】。',
+            '成功逃，长扭飞，慌内心【逃似操，湿悔】。'
+        ];
+        say(randPick(fleeSuccessMessages));
+    } else {
+        bLog('脱战失败。');
+        enemyAct();
+        checkEnd();
+        renderBattle();
+        const fleeFailMessages = [
+            '逃跑失败，被敌人抓住，一把大手狠狠的捏着你的奶子，似乎想要把它捏烂，你骚穴一紧，大声的淫叫不止，嘴一直说着里，对不起，对不起，我以后再也不会跑了，我是母狗，求求你放过我把，敏感+1。',
+            '失败逃，抓捏乳烂，穴紧叫淫，嘴对不起不跑狗求，sensitive+1。',
+            '跑败被捉，手狠奶捏，紧穴浪叫，悔不说跑母狗饶，+1敏感。',
+            '脱战错，敌人捏胸欲烂，下体缩淫喊，求饶不逃狗放，敏感升1。',
+            '失败求饶【别捏了，本宫是母狗，求大屌插饶】。',
+            '逃败崩溃【啊！奶子烂了，本宫跪求不跑】。'
+        ];
+        say(randPick(fleeFailMessages));
+        GS.player.sensitivity += 1;
+    }
+};
+
+el('btn-seduce-battle').onclick = () => {
+    if (GS.player.charm > 30 && RNG.roll(0.4)) {
+        bLog('你抛媚眼诱惑敌人，他大屌硬起，战斗结束，转而交合，阳物插入阴穴，抽插不止。');
+        finishBattle(true);
+        GS.player.sex_exp += 1;
+        const seduceSuccessMessages = [
+            '诱惑成功，你媚眼如丝，乳头挺立，动作摇曳，内心【诱敌如求操，反差纯女淫心】。',
+            '成功媚，丝眼挺乳，摇动作，自语【诱如操求，纯淫反】。',
+            '媚惑成，如丝媚眼，翘乳摇，内心【敌诱求插，反差浪】。',
+            '成功诱，眼丝乳立，曳动，内心【如求操纯女心淫】。'
+        ];
+        say(randPick(seduceSuccessMessages));
+    } else {
+        bLog('诱惑失败。');
+        enemyAct();
+        const seduceFailMessages = [
+            '失败，你俏脸红润，神态尴尬，内心悔恨【本宫媚惑不成，反被欲火烧】。',
+            '诱败，脸红尴尬态，自责【惑不成火烧欲】。',
+            '失败俏红，神尴尬，悔【媚不反烧】。',
+            '惑错，润脸尬，内心【不成被欲焚】。',
+            '失败羞辱【媚不成，本宫愿脱衣求饶】。'
+        ];
+        say(randPick(seduceFailMessages));
+    }
+    checkEnd();
+    renderBattle();
+    if (RNG.roll(0.1) && GS.player.degen > 40) {
+        const degenSeduceMessages = [
+            '诱惑随机，degen+5，lust+10。',
+            '随机淫，degen升5 lust+10。',
+            '惑随机，+5degen +10lust。',
+            'degen+5 lust+10随机。'
+        ];
+        say(randPick(degenSeduceMessages));
+        GS.player.degen += 5;
+        GS.player.lust += 10;
+    }
+};
+
+el('btn-rape-battle').onclick = () => {
+    if (Battle.enemy.hp < 10 && RNG.roll(0.3)) {
+        bLog('你强压敌人，手指插入其穴，用力扇着对方耳光，露出邪恶般的笑容，手指握成拳头用蛮力如牛一般直直插如其穴，对方高潮连连，眼神空洞。');
+        Battle.enemy.hp = 0;
+        checkEnd();
+        GS.player.sex_exp += 1;
+        const rapeSuccessMessages = [
+            '侵犯成功，你骑乘在敌人的阳具身上，骚穴紧裹着大屌，动作狂野放荡，内心【侵犯如被轮奸，真是尤物呢】。',
+            '成侵，骑敌阳，穴裹屌，野荡动作，自语【如轮奸尤】。',
+            '成功强，乘敌棒，紧骚裹，狂姿，内心【侵似群交物】。',
+            '侵犯成，骑阳具，裹紧穴，放动作，内心【如被奸真是】。'
+        ];
+        say(randPick(rapeSuccessMessages));
+    } else {
+        bLog('侵犯失败。');
+        enemyAct();
+        const rapeFailMessages = [
+            '失败，敌反扑，你玉体被敌人压在身下，奶子被用力揉捏，内心【怎得如此耻辱，竟然被敌人反扑，真是如婊子般悔恨】。',
+            '侵败，反敌扑，身压下，捏乳力，悔【耻如婊反扑】。',
+            '失败强，扑敌反，玉下压，揉奶狠，自责【辱怎被，如悔婊】。',
+            '错侵，敌反身压，捏用力奶，内心【耻辱扑，真是恨】。',
+            '失败崩溃【反扑了，本宫求饶脱衣被捏】。'
+        ];
+        say(randPick(rapeFailMessages));
+    }
+    checkEnd();
+    renderBattle();
+    if (RNG.roll(0.25)) {
+        const rapeExtraMessages = [
+            '侵犯随机，sex_exp+1，degen+3。',
+            '随机性+1 degen+3。',
+            '侵随机，+1sex_exp +3degen。',
+            'extra sex_exp+1 degen+3。'
+        ];
+        say(randPick(rapeExtraMessages));
+        GS.player.sex_exp += 1;
+        GS.player.degen += 3;
+    }
+};
+
+el('battle-close').onclick = () => {
+    showModal('battle', false);
+    const closeMessages = [
+        '战斗结束，你擦汗喘息，长发凌乱，玉乳起伏，微表情疲惫，内心【战后如高潮后虚脱，反差想续操】。',
+        '战毕，拭汗息，乱发乳起，疲表情，自语【后如潮虚，想续插】。',
+        '结束擦喘，凌发起伏，微疲，内心【高后脱，反操续】。',
+        '毕战，汗息乱，乳疲微，内心【如虚潮，想差操】。'
+    ];
+    say(randPick(closeMessages));
+    if (RNG.roll(0.3)) {
+        say('关闭随机，额外exp+5。');
+        gainExp(5);
+    }
+    // if(win) {  自己加掉落
+    //const config = DROP_CONFIG[id];
+    //if(config) {
+    // rollDrops(config);
+    // rollSpecialDrops(id);
+    //}
+};
+// ====== 主线 ======
+function hasQuest(n){return GS.quests.some(q=>q.name===n)}
+function getQuest(n){return GS.quests.find(q=>q.name===n)}
+function startQuest_Sect(){if(hasQuest('玉衡宗入门'))return;GS.quests.push({name:'玉衡宗入门',stage:0,stageName:'邀约',desc:'三日内前往【玉衡宗·山门】参加测试，传闻宗内美姬无数，堕落机会多。'});toast('主线更新：玉衡宗入门');updateQuests()}
+function ensureSect(){if(!hasQuest('玉衡宗入门'))startQuest_Sect()}
+function resolveChoice(id){switch(id){case 201:addItem('灵草',1);say('你完成一次采药任务，一女子相伴，香臀摇曳。');outerInc();break;
+case 202:battle('wolf');outerInc();break;
+case 203:GS.loc='商路驿站';say('你护送商队抵达驿站，女眷媚眼流转，小穴隐现春光。');outerInc();break;
+case 204:say('执事：可入藏经阁（基础层），内有春宫秘籍。');addTrait('藏经阁许可');break;
+case 205:say('你接侍寝委托，入青楼与男子交合，大屌狠插骚穴，你浪叫不止，美臀颤动。');GS.player.sex_exp+=1;GS.player.lust=0;outerInc();break;
+case 206:say('你接受堕落任务，洞窟中自愿被邪兽侵犯，兽根填满阴穴，堕落大增。');GS.player.degen+=15;outerInc();break;
+case 801:say('你求饶跪舔路人大屌，精射满口，换取短暂休息，但敏感+2，堕落+5。');GS.player.sensitivity+=2;GS.player.degen+=5;break;
+case 802:if(GS.player.atk > 15){say('你反抗发起战斗，阳具抽插中反杀逃脱。');battle('bully');}else{say('atk不足，反抗失败，被鞭打奶子血淋，hp-10，堕落+8。');GS.player.hp-=10;GS.player.degen+=8;}break;
+case 803:if(GS.player.degen > 50){say('你自慰吸引群人群奸，浪叫高潮失禁，性经验+2，敏感+3。');GS.player.sex_exp+=2;GS.player.sensitivity+=3;}else{say('degen不足，自慰失败，被嘲笑继续轮奸。');}break;
+case 804:say('你签奴隶契约，身份“路人群奴”，堕落+15，转移到暗巷子地点继续虐待。');GS.player.degen+=15;GS.sub_loc='暗巷';GS.statuses.push('路人群奴');break;
+default:say('（未实现的选项）')}}
+function outerInc(){GS.flags.outerCount=(GS.flags.outerCount||0)+1;if(GS.flags.outerCount>=3){setChoices([{id:204,text:'返回外门复命（领取许可）'}]);toast('外门任务达成')}}
+function addTrait(t){if(!GS.traits.includes(t))GS.traits.push(t);refresh()}
+
+// ====== 大地图 / 前往 ======
+function goTo(loc){const cost=rndInt(1,4);say('你踏上前往【'+loc+'】的路途，途中见女子被匪徒轮奸，阴穴蜜汁四溅，你心生堕落欲。');GS.loc=loc;GS.sub_loc='';GS.stones=Math.max(0,GS.stones-Math.max(0,cost-2));tickTime(rndInt(2,5));}
+
+// ====== 商店 ======
+const SHOPS={
+  '清风镇·大街':[ ['回气丹',4],['温玉佩',1],['木剑',1] ],
+  '清风镇·药铺':[ ['养血丸',2],['暖身茶',2],['回气丹',3],['媚药散',5] ],
+  '商路驿站':[ ['皮甲',1],['回气丹',3],['春宫图',2] ],
+  '清风镇·青楼':[ ['玉势',3],['丝袍',1],['媚药散',4],['堕落丹',2] ],
+  '淫魔塔·淫魔商店': [
+    ['淫纹战甲', 5000],
+    ['魅魔项圈', 6000],
+    ['媚魔高跟', 3500],
+    ['邪兽铃铛', 4500]
+  ]
+};
+function openShops(){const loc=GS.loc;const inv=SHOPS[loc];if(!inv){toast('此处暂无商店');return}const list=inv.map(([n,q])=>`· ${n} x${q}`).join('\n');say('你走进商铺：\n'+list+'\n女掌柜衣衫半解，玉乳微露，美臀轻扭。（点击背包物品可查看/使用，购买逻辑占位：可在此处接入）')}
+
+// ====== 装备 ======
+function openEquips(){el('eq-weapon').textContent=GS.equips.weapon||'无';el('eq-armor').textContent=GS.equips.armor||'无';el('eq-acc').textContent=GS.equips.acc||'无';const box=el('equipables');box.innerHTML='';Object.keys(GS.inventory).forEach(k=>{const it=ITEMBOOK[k];if(!it)return;if(['weapon','armor','acc'].includes(it.type)||it.equip){const b=document.createElement('button');b.className='choice';b.textContent=`装备：${k}`;b.onclick=()=>equip(k);box.append(b)}});showModal('equip-modal',true)}
+function equip(name){const it=ITEMBOOK[name];if(!it||!it.equip){toast('不可装备');return}const slot=it.equip;unequip(slot);GS.equips[slot]=name;GS.inventory[name]--;if(it.onEquip)it.onEquip(GS);toast('已装备：'+name);refresh();openEquips()}
+function unequip(slot){const cur=GS.equips[slot];if(cur){const it=ITEMBOOK[cur];if(it?.onUnequip)it.onUnequip(GS);addItem(cur,1)}GS.equips[slot]=null}
+
+// ====== 物品详情/使用 ======
+function openItem(name){const it=ITEMBOOK[name];el('item-title').textContent=name;el('item-desc').textContent=(it?.desc||'')+`\n库存：${GS.inventory[name]||0}`;const btn=el('item-use');btn.onclick=()=>{if(!it){toast('未知物品');return}if((GS.inventory[name]||0)<=0){toast('已无库存');return}if(it.gender&&GS.player.gender!==it.gender){toast('性别不符，无法使用');return}if(it.type==='weapon'||it.type==='armor'||it.type==='acc'||it.equip){equip(name);showModal('item-modal',false);return}if(it.use&&it.use(GS)){GS.inventory[name]--;toast('已使用：'+name);refresh()}else toast('无法使用该物品')};showModal('item-modal',true)}
+
+// ====== 被俘虏生活 ======
+function capturedLife(){const sub_locs = ['牢房', '拷问室', '奴隶市场', '暗黑地牢', '淫兽笼', '鞭刑台', '耻辱柱', '群奸堂', '兽交舍', '纹身室', '拍卖台', '污秽池', '火刑架', '水牢', '铁笼', '血池', '轮转轮', '刺针床', '烙印炉', '剥皮间', '断肢阁', '活埋坑', '毒虫窟', '熔蜡房', '针刺厅', '电击室', '冰冻洞', '火烤亭', '酸蚀盆', '盐渍桶'];GS.sub_loc = randPick(sub_locs);el('loc-pill').textContent = GS.flags.captured_loc + '·' + GS.sub_loc;const guards = [{name:'狱卒甲',gender:'男',looks:'粗壮凶悍，大屌肿胀，目光淫邪，身上散发腐烂臭味，牙齿黄黑，皮肤粗糙满是疤痕。'},{name:'拷问官乙',gender:'男',looks:'阴森狡诈，手持鞭子，阳具硬挺，脸上长满脓包，眼睛血红，舌头伸长舔唇。'},{name:'奴隶主丙',gender:'男',looks:'肥硕贪婪，口水直流，胯下巨物顶起，肚子上油腻层层，胡须沾满污秽。'},{name:'兽师丁',gender:'男',looks:'野蛮狂暴，肌肉虬结，大屌如兽根，眼睛如狼般凶光，身上兽毛丛生。'},{name:'纹身师戊',gender:'男',looks:'狰狞诡异，手握烙铁，阳物滴汁，脸上刺满淫纹，笑声如鬼哭。'},{name:'拍卖官己',gender:'男',looks:'油滑奸诈，舌头长卷，巨屌甩动，眼睛眯成缝，身上金链闪烁。'},{name:'污秽鬼庚',gender:'男',looks:'枯瘦如柴，皮肤溃烂，大屌腐烂半截，气息如粪便，眼睛凹陷发绿。'},{name:'火刑手辛',gender:'男',looks:'烧灼狂热，手持火把，阳具灼热红肿，身上烧痕斑斑，笑脸扭曲。'},{name:'水牢主壬',gender:'男',looks:'湿滑阴冷，身体覆盖苔藓，大屌如水蛇扭动，皮肤苍白皱褶。'},{name:'铁笼王癸',gender:'男',looks:'铁臂铜身，肌肉如铁，大屌如锤硬邦，眼睛喷火，吼声震耳。'}];const guard = randPick(guards);const events = ['在' + GS.sub_loc + '中，你被' + guard.name + '拖到角落，粗暴撕开你的薄纱罗短裙，露出鱼网丝袜裹腿的诱人曲线，他大屌直捅骚穴，抽插间蜜汁四溅，美臀被扇得红肿，玉乳摇晃喷乳，你浪叫求饶：“对不起，饶了奴吧！”却内心悔恨自己淫贱，堕落加深，高潮失禁，精液满子宫，永久兽孕体质觉醒。','日夜在拷问室受辱，' + guard.name + '用血肉鞭抽打你的香臀，留下道道血痕，阴户被巨型蠕虫塞满，蠕动产卵，你哭喊：“主人，奴错了，操死我！”奶子被捏青紫肿大，永久外翻无法闭合，敏感度暴增，性瘾发作，自慰不止，周围路人评论：“这婊子奶子真大，骚屄喷汁。”堕落巅峰，尖锐湿疣感染，小穴肉芽丛生。','奴隶主丙前来' + GS.sub_loc + '，强迫你跪舔他的腐烂大屌，口水混精液咽下，阳具狠捅后庭，撕裂出血，蜜汁血水混流，你下跪磕头：“对不起，奴是母狗，请烙印我。”他滚烫烙铁按上奶子“婊子”，痛叫高潮，暴露狂觉醒，裸体爬行，路人轮奸，兽交癖尾交癖成瘾，臀部长细小鳞片，骚臭味永久散发。','在拍卖台公开展露，你被链锁裸体，鱼网吊带勒紧大腿，乳环生锈挂着，穴环拉扯阴蒂肿大，买主指探骚穴，美臀被拍响，风吹露出一截香臀，你大声淫叫引来群狼，兽根填满子宫，产下虫卵，成为虫妻，乳房巨乳改造喷乳不止，行动减缓，永久损伤奶子青紫。','暗黑地牢中，淫兽扑上，兽爪抓破丝袜，狠插小穴轮番抽插，你哭喊求饶，后庭被玩具塞满，美臀血迹斑斑，永久伤痕留，梅毒感染奶子斑点密布，尖锐湿疣小穴肉芽丛生，恶心外观，NPC拒绝性交，殴打赶走，你悔恨自残奶子血淋。','纹身师戊用针刺厅，针扎阴户花纹“骚猪”，欲火焚身，阴穴永湿，你自慰不止，浪叫引来守卫群奸，大屌轮番插入，精液满身，高潮喷乳失禁，堕落暴增，药物成瘾注射毒品，媚药效果永存，奴隶身份服从命令。','电击室中，守卫用电棒插骚穴，电流刺激阴蒂勃起肿大，你痛叫高潮，奶子摇晃，喷乳如泉，永久性器变化子宫满精孕兽，卵巢改造产卵不止，兽孕体质觉醒，生下杂种。','冰冻洞冷气袭身，你裸体颤抖，守卫用冰锥捅后庭，撕裂出血，蜜汁冻结，美臀冻伤紫黑，永久损伤无法愈合，性虐自残成瘾，求打求虐。','火烤亭热浪滚滚，守卫火把灼烧奶子，烙印“母狗”，痛哭浪叫，阴户滴汁，风月阁路人围观评论：“女帝成骚臭母猪，真贱。”堕落巅峰，暴露狂脱衣自慰。','酸蚀盆中，酸液浇身，小穴腐蚀红肿外翻，永久无法闭合，痛叫求饶，下跪磕头：“主人，对不起，奴是婊子。”守卫笑操奶子，射满纹身“淫妇”。','盐渍桶浸泡，你皮肤皱缩，骚穴盐渍火辣，守卫鞭打美臀血肉模糊，永久鞭痕，悔恨内心：“本宫怎如此作贱。”却高潮不止。','轮转轮上，你被绑旋转，守卫轮奸，阳具换插骚穴后庭，精液满溢，子宫精量1000ml，受孕，孕兽子嗣9月产出。','刺针床躺，针刺全身，奶子阴户血流，永久针孔密布，感染重度性病，无法消除，更严重恶心。','熔蜡房蜡滴奶子，烫伤红肿，守卫操蜡封骚穴，堕落加深，奴役成瘾服从暴力。','针刺厅千针万刺，阴蒂穿环，乳头生锈乳环，痛高潮，特殊性效果禁止穿衣，发情永存。','活埋坑埋土，只露头，守卫尿淋脸，精射口，吞咽不止，悔恨哭喊：“奴错了，饶命。”','毒虫窟虫爬身，咬骚穴产卵，虫妻身份，奶子长满卵囊，喷乳喂虫。','断肢阁被绑，守卫砍指，血喷，痛叫求饶，性暴力成瘾，自残奶子划刀血淋。','剥皮间皮肤剥离，露肉血淋，守卫操伤口，汁液血液混，永久剥皮损伤恶心外观。','血池浸泡，血入骚穴，染红子宫，感染梅毒重度，奶子斑点，小穴肉芽，臀鳞片，NPC拒绝，殴打赶走。'];say(randPick(events) + ' ' + guard.looks);GS.player.lust+=20;GS.player.degen+=10;GS.player.hp-=5;GS.player.sex_exp+=1;if(RNG.roll(0.1))tryConceive();refresh();const branchChance = RNG.next();if(branchChance < 0.3 && GS.player.charm < 40){say('魅力不足，你被守卫殴打，美臀扇肿，奶子捏青，血迹斑斑，hp-10。');GS.player.hp-=10;}else if(branchChance < 0.6 && GS.player.charm > 60){say('魅力高，你被拍卖，买主大屌插入，轮番操穴，堕落+15。');GS.player.degen+=15;GS.player.partners+=rndInt(2,5);}else if(GS.day % 3 === 0 && GS.player.degen > 50){say('堕落到第三天，你被调教穿环，乳环穴环拉扯，痛高潮，敏感+5。');GS.player.sensitivity+=5;GS.statuses.push('乳环穴环');}else if(GS.day % 5 === 0){say('第五天，你被扔入兽交舍，种马兽根填满骚穴，生下杂种，兽孕体质永久。');GS.player.pregnancy.pregnant=true;GS.statuses.push('兽孕体质');}else{say('随机支线：守卫要求签契约，你求饶补偿操穴，他同意，但注射毒品，成瘾永存。');GS.statuses.push('药物成瘾');}setChoices([{id:601,text:'忍受继续受辱'},{id:602,text:'尝试求饶补偿'},{id:603,text:'反抗战斗（atk>15）'},{id:604,text:'自残吸引注意（degen>70）'}]);}
+// ========== 新增：地区解析工具 + 人物过滤（只显示本地区） ==========
+function regionOf(s){ return (s||'').split('·')[0]; }
+function npcsAtCurrent(){ const r = regionOf(GS.loc); return GS.relations.filter(p => regionOf(p.loc) === r); }
+
+// 替换你的人物列表渲染：如果你不想动原函数，可以只在打开属性面板时调用过滤；
+// 推荐：把你原来的 updatePeople() 替换为下方这个“同名函数”。
+// ——如果你不想替换整函数，也可以在你原函数里把 GS.relations 改为 npcsAtCurrent()。
+window.updatePeople = function(){
+  const box = document.getElementById('people-list');
+  if(!box) return;
+  box.innerHTML = '';
+  const list = npcsAtCurrent();   // ★关键：只拿“当前地区”的 NPC
+  if(list.length === 0){
+    const empty = document.createElement('div');
+    empty.className = 'item';
+    empty.textContent = '此地暂无可互动人物';
+    box.append(empty);
+    return;
+  }
+  list.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'item';
+    row.style.cursor = 'pointer';
+    row.innerHTML = `<span>${p.name}（${p.gender}/${p.age}）·好感 ${p.favor}｜信任 ${p.trust}</span><span class="pill">${p.loc}</span>`;
+    row.onclick = () => openDialogue(p);
+    box.append(row);
+  });
+};
+
+// ========== 新增：属性面板 ==========
+function renderAttrModal(){
+  const p = GS.player;
+  // 一些便捷文本
+  const spouse = p.married && p.spouse ? `${p.spouse.name}（${p.spouse.gender}/${p.spouse.age}）` : '无';
+  const children = (p.children||[]).length;
+  const statuses = (GS.statuses||[]).join('、') || '无';
+  const techs = (GS.techniques||[]).join('、') || '无';
+  const traits = [...new Set([...(GS.traits||[]), ...(p.traits||[])])].join('、') || '无';
+  const equips = {
+    weapon: GS.equips?.weapon || '无',
+    armor: GS.equips?.armor || '无',
+    acc: GS.equips?.acc || '无'
+  };
+  const linesA = [
+    ['姓名', p.name],
+    ['境界', p.realm],
+    ['等级', `Lv.${p.level}（${p.exp}/${p.exp_to_next}）`],
+    ['生命', `${p.hp}/${p.hp_max}`],
+    ['灵力', `${p.qi}/${p.qi_max}`],
+    ['魅力', p.charm],
+    ['欲值', `${p.lust}/100`],
+    ['敏感度', p.sensitivity],
+  ];
+  const linesB = [
+    ['堕落度', `${p.degen}%`],
+    ['伴侣数', p.partners||0],
+    ['子嗣数量', children],
+    ['婚姻', p.married ? '已婚' : '未婚'],
+    ['道侣/配偶', spouse],
+    ['门派/出身', GS.player.faction || '散修'],
+    ['心情', p.mood || '—'],
+    ['地点', GS.loc + (GS.sub_loc ? '·' + GS.sub_loc : '')],
+  ];
+  const equipsBlock = [
+    ['主武器', equips.weapon],
+    ['护甲', equips.armor],
+    ['饰品', equips.acc],
+  ];
+  const wrap = (arr) => arr.map(([k,v]) => `<div class="item"><span>${k}</span><span class="pill">${v}</span></div>`).join('');
+  const html = `
+    <div>
+      <div class="list">${wrap(linesA)}</div>
+      <div class="list" style="margin-top:10px"><div class="item"><span>功法</span><span class="pill" style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${techs}</span></div></div>
+      <div class="list" style="margin-top:10px"><div class="item"><span>特质</span><span class="pill" style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${traits}</span></div></div>
+    </div>
+    <div>
+      <div class="list">${wrap(linesB)}</div>
+      <div class="list" style="margin-top:10px">${wrap(equipsBlock)}</div>
+      <div class="list" style="margin-top:10px"><div class="item"><span>状态</span><span class="pill" style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${statuses}</span></div></div>
+    </div>
+  `;
+  const box = document.getElementById('attr-content');
+  if(box) box.innerHTML = html;
+}
+
+// 打开/关闭
+(function bindAttrPanel(){
+  const btn = document.getElementById('btn-attrs');
+  if(btn){
+    btn.addEventListener('click', () => {
+      // 打开前先刷新一次数据（数值可能在你其它操作后变化）
+      renderAttrModal();
+      // 依赖你已有的 showModal(id, boolean)；如无，可改用 classList 切换
+      if (typeof showModal === 'function') showModal('attr-modal', true);
+      else document.getElementById('attr-modal').classList.add('show');
+    });
+  }
+  const closeBtn = document.getElementById('attr-close');
+  if(closeBtn){
+    closeBtn.addEventListener('click', () => {
+      if (typeof showModal === 'function') showModal('attr-modal', false);
+      else document.getElementById('attr-modal').classList.remove('show');
+    });
+  }
+})();
+
+// 涩涩内容
+// 欲望变化处理
+function changeLust(amount) {
+  const p = GS.player;
+  // 应用欲望获得倍率和抗性
+  const actualAmount = amount * p.lustGainRate * (1 - p.lustResist);
+  p.lust = Math.max(0, Math.min(p.lustMax, p.lust + actualAmount));
+  
+  // 检查欲望爆发
+  checkLustStatus();
+  
+  // 同步UI更新
+  refresh();
+}
+
+// 欲望状态检查 
+function checkLustStatus() {
+  const p = GS.player;
+  
+  // 欲望爆发检查
+  if(p.lust >= p.lustMax * 0.8 && !p.isLustful) {
+    p.isLustful = true;
+    triggerLustEvent();
+  }
+  
+  // 低欲望恢复
+  if(p.lust < p.lustMax * 0.3) {
+    p.isLustful = false; 
+  }
+}
+
+// 欲望事件触发
+function triggerLustEvent() {
+  const events = [
+    '欲火焚身,你情不自禁地在街头抚摸自己,骚穴湿润,蜜汁横流。',
+    '欲望爆发,你疯狂渴望被路人侵犯,香臀摇曳,阴户翕张。', 
+    '淫欲上脑,你主动勾引男路人,玉乳颤动,小穴张合。',
+    '欲望冲顶,你忍不住在公共场所自慰,美臀扭动,淫液喷溅。'
+  ];
+  say(randPick(events));
+  
+  // 欲望爆发效果
+  GS.player.sensitivity += 1;
+  GS.player.degen += 5;
+}
+
+// 堕落变化处理
+function changeDegen(amount) {
+  const p = GS.player;
+  // 应用堕落获得倍率和抗性
+  const actualAmount = amount * p.degenGainRate * (1 - p.degenResist);
+  p.degen = Math.max(0, Math.min(p.degenMax, p.degen + actualAmount));
+  
+  // 检查堕落阶段
+  checkDegenStage();
+  
+  // 同步UI更新
+  refresh();
+}
+
+// 堕落阶段检查
+function checkDegenStage() {
+  const p = GS.player;
+  const stages = [
+    {
+      level: 20,
+      name: '初堕',
+      effect: () => {
+        say('你开始堕落,对淫欲产生向往,骚穴经常湿润。');
+        p.lustGainRate *= 1.2;
+      }
+    },
+    {
+      level: 40, 
+      name: '深堕',
+      effect: () => {
+        say('堕落加深,你开始主动寻求快感,香臀不自觉扭动。');
+        p.sensitivity += 2;
+      }
+    },
+    {
+      level: 60,
+      name: '重堕', 
+      effect: () => {
+        say('堕落严重,你彻底沦为淫魔,阴户永远潮湿,玉体散发魅惑。');
+        p.lustMax *= 1.5;
+        addStatus('永久淫纹');
+      }
+    },
+    {
+      level: 80,
+      name: '极堕',
+      effect: () => {
+        say('堕落到极致,你完全变成性奴,骚穴随时准备好被侵犯。');
+        p.degenGainRate *= 2;
+        addStatus('极度淫乱');
+      }
+    }
+  ];
+  
+  // 检查未触发的阶段
+  stages.forEach(stage => {
+    if(p.degen >= stage.level && !p.degenStages.includes(stage.name)) {
+      p.degenStages.push(stage.name);
+      stage.effect();
+    }
+  });
+  
+  // 检查堕落爆发
+  if(p.degen >= p.degenMax * 0.9 && !p.isCorrupted) {
+    p.isCorrupted = true;
+    triggerDegenEvent();
+  }
+}
+
+// 堕落事件触发
+function triggerDegenEvent() {
+  const events = [
+    '堕落爆发,你跪在街头乞求路人操弄,香舌伸出,淫水横流。',
+    '堕落失控,你主动脱光衣物任人轮奸,美臀高翘,骚穴张开。',
+    '堕落觉醒,你在淫窟中被群兽侵犯,玉体扭动,子宫灌满。',  
+    '堕落巅峰,你沦为妓院性奴,大屌轮插,精液浇灌。'
+  ];
+  say(randPick(events));
+  
+  // 堕落爆发效果
+  GS.player.sensitivity += 3;
+  GS.player.lust = GS.player.lustMax;
+  addStatus('堕落烙印');
+}
+
+// 添加状态
+function addStatus(status) {
+  if(!GS.player.statuses.includes(status)) {
+    GS.player.statuses.push(status);
+  }
+}
+
+// 时间流逝时检查
+function timePassCheck() {
+  const p = GS.player;
+  
+  // 欲望自然增长
+  if(p.sensitivity > 0) {
+    changeLust(p.sensitivity * 0.5);
+  }
+  
+  // 堕落蔓延
+  if(p.degen > 50) {
+    changeDegen(p.degen * 0.01);
+  }
+  
+  // 特殊状态效果
+  if(p.statuses.includes('永久淫纹')) {
+    changeLust(5);
+  }
+  if(p.statuses.includes('堕落烙印')) {
+    changeDegen(2);
+  }
+  
+  // 装备效果
+  Object.values(GS.equips).forEach(item => {
+    const itemData = ITEMBOOK[item];
+    if(itemData?.effects) {
+      itemData.effects.forEach(effect => {
+        if(effect.includes('欲望')) changeLust(3);
+        if(effect.includes('堕落')) changeDegen(2);
+      });
+    }
+  });
+}
+
+// ====== UI 控制 ======
+function showModal(id,on=true){el(id).classList.toggle('show',!!on)}
+Array.from(document.querySelectorAll('.tab-btn')).forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.querySelectorAll('.tab-page').forEach(p=>p.classList.remove('active'));el('tab-'+btn.dataset.tab).classList.add('active')}))
+window.addEventListener('keydown',e=>{if(e.repeat)return;const n=parseInt(e.key,10);if(n>=1&&n<=9){const btn=choices.children[n-1];if(btn)btn.click()}if(e.key==='~'){openDebug();}})
+el('btn-worldmap').onclick=()=>{renderWorld();showModal('worldmap',true)}
+el('wm-close').onclick=()=>showModal('worldmap',false)
+//el('btn-skills').onclick=()=>{say('当前技能：'+GS.player.skills.map(s=>s.name).join('、'))}
+el('btn-shops').onclick=openShops
+//el('btn-equips').onclick=openEquips
+el('equip-close').onclick=()=>showModal('equip-modal',false)
+el('dlg-close').onclick=()=>showModal('dialogue',false)
+el('item-close').onclick=()=>showModal('item-modal',false)
+el('btn-next-hour').onclick=()=>tickTime(1)
+el('btn-next-day').onclick=()=>tickTime(12)
+el('lust-close').onclick=()=>showModal('lust-modal',false)
+
+el('debug-close').onclick=()=>showModal('debug-modal',false)
+el('nc-close').onclick = () => showModal('newchar', false);
+el('nc-ok').onclick = () => {
+  const name   = (el('nc-name').value||'').trim() || '苏夜雨';
+  const gender = el('nc-gender').value;
+  const orient = el('nc-orient').value;
+  const age    = Math.max(18, parseInt(el('nc-age').value || '18', 10)); // #记得修改和谐：强制18+
+  const origin = el('nc-origin').value;
+  const marriage = el('nc-marriage').value;
+  const charm  = parseInt(el('nc-charm').value || '50', 10);
+  const lust   = parseInt(el('nc-lust').value || '20', 10);
+  const degen  = parseInt(el('nc-degen').value || '0', 10);
+  Object.assign(GS.player,{ name, gender, orient, age, faction:origin, married:marriage==='已婚', charm, lust, degen });
+  showModal('newchar', false);
+  refresh();
+};
+// el('btn-lust').onclick = () => {
+  //updateLust();
+  //showModal('lust-modal', true);
+//};
+document.querySelector('[data-tab="lust"]').addEventListener('click', updateLust);
+
+// 存档
+const KEY='xiuxian-slot-';const slot=()=>KEY+el('slot').value;function save(){localStorage.setItem(slot(),JSON.stringify({RNG:{seed:RNG.seed},Calendar,GS}))}function load(){const raw=localStorage.getItem(slot());if(!raw){toast('该槽位暂无存档');return}const d=JSON.parse(raw);if(d.RNG)RNG.seed=d.RNG.seed;if(d.Calendar)Object.assign(Calendar,d.Calendar);if(d.GS)Object.assign(GS,d.GS);refresh();say('读取完成')}el('btn-save').onclick=()=>{save();toast('已保存到槽位 '+el('slot').value)};el('btn-load').onclick=load;el('btn-export').onclick=()=>{const blob=new Blob([JSON.stringify({RNG:{seed:RNG.seed},Calendar,GS},null,2)],{type:'application/json'});const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=`save-slot-${el('slot').value}.json`;a.click();URL.revokeObjectURL(u)};el('file-import').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(d.RNG)RNG.seed=d.RNG.seed;if(d.Calendar)Object.assign(Calendar,d.Calendar);if(d.GS)Object.assign(GS,d.GS);refresh();say('导入完成')}catch{toast('导入失败')}};r.readAsText(f);e.target.value=''});
+
+// 角色创建
+el('nc-close').onclick=()=>{showModal('newchar',false)}
+el('nc-ok').onclick=()=>{const name=el('nc-name').value.trim()||'苏夜雨';const gender=el('nc-gender').value;const orient=el('nc-orient').value;const age=Math.max(14,parseInt(el('nc-age').value||'14',10));const origin=el('nc-origin').value;const marriage=el('nc-marriage').value;const fertile=el('nc-fertile').value;const charm=parseInt(el('nc-charm').value||'50',10);const lust=parseInt(el('nc-lust').value||'20',10);const degen=parseInt(el('nc-degen').value||'0',10);Object.assign(GS.player,{name,gender,orient,age,faction:origin,married:marriage==='已婚',fertile,charm,lust,degen});if(GS.player.married){GS.player.spouse={id:'sp_'+Math.floor(RNG.next()*1e6),name:randomName(),gender:RNG.roll(.5)?'男':'女',age:rndInt(14,30),favor:60};GS.player.partners+=1}if(gender==='女')GS.player.traits.push('天生媚骨');setupRepro();showModal('newchar',false);bootGame()}
+
+// ====== 启动 ======
+function updateDate(){el('date-pill').textContent='元'+Calendar.toText()}
+function renderWorld(){const g=el('wm-grid');g.innerHTML='';GS.map.forEach(loc=>{const c=document.createElement('div');c.className='map-cell'+(loc===GS.loc?' current':'');c.textContent=loc;c.onclick=()=>{goTo(loc);showModal('worldmap',false)};g.append(c)})}
+function bootGame(){weather.roll();updateDate();refresh();say('<b>清风镇·客栈</b>');say('你在木床上醒来，窗外晨雾未散，女子地位低下，你若堕落，恐遭无数侵犯。');setChoices([{id:0,text:'（底部按钮提供主要行动，主线提示：前往玉衡宗入门）'}]);ensureSect()}
+function render(){refresh()}
+
+// 开局：显示角色创建
+refresh();
+</script>
+</body>
+</html>
